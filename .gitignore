@@ -94,11 +94,7 @@ lerna-debug.log*
 .env.production.local
 
 # --- IDEs & Editors ---
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
+.vscode/
 .idea/
 *.suo
 *.ntvs*
