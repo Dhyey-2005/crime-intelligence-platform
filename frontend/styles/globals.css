@@ -1,0 +1,114 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-primary: #07090e;      /* Premium deep obsidian black-blue */
+    --bg-secondary: #0d111a;    /* Matte dark navy-slate */
+    --bg-card: #121824;         /* Rich dark navy card color */
+    
+    --text-primary: #f8fafc;    /* Crisp, bright white-slate */
+    --text-secondary: #94a3b8;  /* Clean, highly-readable slate text */
+    
+    --accent-primary: #3b82f6;  /* High-contrast vibrant blue */
+    
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    
+    --ai-intelligence: #a855f7; /* Vibrant cognitive violet */
+    --analytics: #06b6d4;       /* Tactical cyan */
+    
+    --border-subtle: #1a2333;   /* Very subtle slate line */
+    --border-default: #2d3b50;  /* Standard border line */
+    
+    --radius-sm: 0.25rem;
+    --radius-md: 0.375rem;
+    --radius-lg: 0.5rem;
+    --radius-xl: 0.75rem;
+    --radius-xxl: 1rem;
+  }
+
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    letter-spacing: -0.01em;
+  }
+
+  /* Thin, professional scrollbar */
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--bg-primary);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-default);
+    border-radius: var(--radius-sm);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+  }
+}
+
+@layer utilities {
+  /* Typography Utility Classes */
+  .text-page-title {
+    font-size: 1.75rem; /* 28px */
+    font-weight: 800;
+    line-height: 2.25rem;
+    letter-spacing: -0.03em;
+    color: var(--text-primary);
+  }
+
+  .text-section-title {
+    font-size: 1.25rem; /* 20px */
+    font-weight: 700;
+    line-height: 1.75rem;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+  }
+
+  .text-card-title {
+    font-size: 1rem; /* 16px */
+    font-weight: 600;
+    line-height: 1.5rem;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+  }
+
+  .text-body {
+    font-size: 0.8125rem; /* 13px */
+    font-weight: 400;
+    line-height: 1.25rem;
+    color: var(--text-secondary);
+  }
+
+  .text-caption {
+    font-size: 0.75rem; /* 12px */
+    font-weight: 400;
+    line-height: 1rem;
+    color: var(--text-secondary);
+  }
+
+  .text-label {
+    font-size: 0.6875rem; /* 11px */
+    font-weight: 600;
+    line-height: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-secondary);
+  }
+
+  .text-table-header {
+    font-size: 0.6875rem; /* 11px */
+    font-weight: 600;
+    line-height: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-secondary);
+  }
+}
