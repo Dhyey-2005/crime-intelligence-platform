@@ -1,0 +1,124 @@
+# ==========================================
+# Crime Intelligence Platform - .gitignore
+# ==========================================
+
+# --- Python & FastAPI ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# --- Testing & Coverage ---
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+
+# --- Secrets & Environment Variables ---
+.env
+.env.*
+*.env
+!.env.example
+secrets.json
+*.pem
+*.key
+*.cert
+*.pfx
+
+# --- Database & Local Scratch Files ---
+*.sqlite3
+*.db
+*.log
+*.bak
+*.tmp
+*.temp
+temp.py
+*.session.sql
+Local*.sql
+dump.sql
+
+# --- Frontend / Node.js / Vite / Next.js ---
+node_modules/
+jspm_packages/
+.next/
+.nuxt/
+.output/
+dist/
+build/
+.cache/
+.parcel-cache/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# --- IDEs & Editors ---
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.vim
+*.kate-swp
+
+# --- OS Generated Files ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# --- AI Assistants & Agent Scratch ---
+.agents/
+.gemini/
+.claude/
