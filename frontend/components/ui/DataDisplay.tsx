@@ -163,7 +163,7 @@ export const StatContainer: React.FC<StatContainerProps> = ({
   className,
 }) => {
   return (
-    <div className={clsx("p-5 bg-background-card border border-border-subtle rounded-lg shadow-sm flex items-start justify-between select-none", className)}>
+    <div className={clsx("p-5 bg-gradient-to-br from-background-card via-background-card to-background-secondary/40 border border-border-subtle/80 rounded-lg shadow-sm hover:shadow-md hover:border-accent-primary/40 hover:-translate-y-0.5 transition-[transform,box-shadow,border-color] duration-150 ease-out flex items-start justify-between select-none group", className)}>
       <div className="space-y-2">
         <span className="text-[10px] font-bold uppercase tracking-wider text-text-secondary">{title}</span>
         <div className="flex items-baseline space-x-2.5">
@@ -191,7 +191,7 @@ export const StatContainer: React.FC<StatContainerProps> = ({
       </div>
 
       {icon && (
-        <div className="h-10 w-10 rounded bg-background-secondary border border-border-subtle flex items-center justify-center text-accent-primary">
+        <div className="h-10 w-10 rounded-lg bg-accent-primary/10 border border-accent-primary/20 flex items-center justify-center text-accent-primary group-hover:scale-105 group-hover:bg-accent-primary/20 transition-transform duration-150 ease-out">
           {icon}
         </div>
       )}

@@ -1,25 +1,27 @@
 export const tokens = {
   colors: {
     background: {
-      primary: "#0B1220",
-      secondary: "#111827",
-      card: "#1F2937",
+      primary: "#06080F",    // Ultra-deep obsidian black-blue
+      secondary: "#0B101D",  // Sleek matte dark navy
+      card: "#101726",       // Rich elevated dark card navy
     },
     text: {
-      primary: "#F9FAFB",
-      secondary: "#9CA3AF",
+      primary: "#F8FAFC",    // Crisp bright white-slate
+      secondary: "#94A3B8",  // Highly readable cool slate
     },
     accent: {
-      primary: "#2563EB",
+      primary: "#3B82F6",    // Vibrant electric blue
+      glow: "rgba(59, 130, 246, 0.4)",
     },
     success: "#10B981",
     warning: "#F59E0B",
     danger: "#EF4444",
-    ai: "#8B5CF6",
-    analytics: "#06B6D4",
+    ai: "#A855F7",           // Cognitive violet
+    analytics: "#06B6D4",    // Tactical cyan
     border: {
-      subtle: "#1F2937",
-      default: "#374151",
+      subtle: "#182234",     // Crisp subtle slate line
+      default: "#2A384E",    // Standard border line
+      glow: "rgba(59, 130, 246, 0.3)",
     },
   },
   spacing: {
@@ -36,14 +38,15 @@ export const tokens = {
     xxl: "1rem",           // 16px
   },
   shadow: {
-    sm: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
-    md: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
-    lg: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
-    hover: "0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+    sm: "0 1px 2px 0 rgba(0, 0, 0, 0.25)",
+    md: "0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2)",
+    lg: "0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.25)",
+    hover: "0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 0 20px rgba(59, 130, 246, 0.15)",
+    glow: "0 0 25px rgba(59, 130, 246, 0.25)",
   },
   transition: {
-    duration: "200ms",
-    curve: "cubic-bezier(0.4, 0, 0.2, 1)",
+    duration: "150ms",
+    curve: "cubic-bezier(0.16, 1, 0.3, 1)", // Smooth Apple/Stripe feel
   },
 } as const;
 

@@ -4,8 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useLayoutStore } from "@/store/layoutStore";
-import { useAuthStore } from "@/store/authStore";
-import { Menu, Search, Bell, Sun, User, X, LogOut, Sparkles, ShieldAlert, CheckCircle, SearchCode, Inbox } from "lucide-react";
+import { Menu, Search, Bell, Sun, X, Sparkles, ShieldAlert, CheckCircle, SearchCode, Inbox } from "lucide-react";
 import { Badge } from "@/components/ui/Feedback";
 import Button from "@/components/ui/Button";
 import { toast } from "sonner";
@@ -42,15 +41,9 @@ export default function TopBar() {
   const pathname = usePathname();
   const router = useRouter();
   const { isMobileOpen, toggleMobileOpen } = useLayoutStore();
-  const { user, logout } = useAuthStore();
 
   const currentSegment = pathname.split("/").filter(Boolean)[0] || "";
   const pageTitle = routeTitleMap[currentSegment] || "Crime Command HQ";
-
-  const handleLogout = () => {
-    logout();
-    router.push("/login");
-  };
 
   // 1. Notification Dropdown States
   const [isNotifOpen, setIsNotifOpen] = React.useState(false);
@@ -117,7 +110,7 @@ export default function TopBar() {
   }, [pathname]);
 
   return (
-    <header className="h-16 flex items-center justify-between px-6 bg-background-secondary border-b border-border-subtle select-none z-30 relative">
+    <header className="h-16 flex items-center justify-between px-6 bg-background-secondary/90 backdrop-blur-md border-b border-border-subtle/80 select-none z-30 relative shadow-sm">
       {/* Left: Mobile Toggle & Brand / Title */}
       <div className="flex items-center space-x-4">
         <button
@@ -130,9 +123,9 @@ export default function TopBar() {
         </button>
 
         <div className="flex flex-col">
-          <span className="text-[10px] text-accent-primary font-bold tracking-widest uppercase">
+          <Link href="/" className="text-[10px] text-accent-primary font-bold tracking-widest uppercase hover:underline">
             Crime Intelligence Platform
-          </span>
+          </Link>
           <h1 className="text-sm font-semibold text-text-primary truncate max-w-[200px] md:max-w-none">
             {pageTitle}
           </h1>
@@ -154,7 +147,7 @@ export default function TopBar() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onFocus={() => setIsSearchOpen(true)}
-              className="w-72 pl-9 pr-8 py-1.5 bg-background-primary border border-border-default rounded-md text-xs text-text-primary placeholder-text-secondary focus:outline-none focus:ring-1 focus:ring-accent-primary transition-all"
+              className="w-72 pl-9 pr-8 py-1.5 bg-background-primary/80 border border-border-default rounded-md text-xs text-text-primary placeholder-text-secondary focus:outline-none focus:ring-1 focus:ring-accent-primary focus:border-accent-primary transition-[border-color,box-shadow] duration-150 ease-out"
             />
             {searchQuery && (
               <button
@@ -314,29 +307,12 @@ export default function TopBar() {
             )}
           </div>
 
-          {/* User Profile & Logout */}
+          {/* System Status Indicator */}
           <div className="flex items-center space-x-2 pl-2 border-l border-border-default">
-            <Link href="/settings" className="flex items-center space-x-2 hover:opacity-85 transition-opacity">
-              <div className="h-7 w-7 rounded-full bg-accent-primary/20 border border-accent-primary/40 flex items-center justify-center">
-                <User className="h-4 w-4 text-accent-primary" />
-              </div>
-              <div className="hidden lg:flex flex-col text-left mr-1">
-                <span className="text-[11px] font-semibold text-text-primary leading-tight">
-                  {user?.name || "Inspector Desai"}
-                </span>
-                <span className="text-[9px] text-text-secondary leading-none">
-                  {user?.role || "Command Group"}
-                </span>
-              </div>
-            </Link>
-            <button
-              onClick={handleLogout}
-              className="p-1.5 text-text-secondary hover:text-danger rounded-md focus:outline-none focus:ring-1 focus:ring-danger"
-              aria-label="Logout user session"
-              title="Logout session"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-            </button>
+            <div className="flex items-center space-x-2 px-2.5 py-1 rounded-full bg-background-primary/80 border border-border-default text-xs select-none">
+              <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
+              <span className="font-semibold text-[11px] text-text-primary">Terminal Active</span>
+            </div>
           </div>
 
         </div>

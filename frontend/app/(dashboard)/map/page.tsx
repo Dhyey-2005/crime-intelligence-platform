@@ -7,21 +7,21 @@ import {
   districtsGeoJSON,
   mockStations,
   mockGeographicAlerts,
-  timelineSnapshots,
   StationMarker,
   GeographicAlert,
+  HotspotPoint,
 } from "@/constants/mockGeographicData";
-import { crimeCategories } from "@/constants/mockAnalyticsData";
+import { crimeCategories, AnalyticsCase, mockAnalyticsCases } from "@/constants/mockAnalyticsData";
+import { analyticsService } from "@/services/analyticsService";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Form";
 import { Badge, Spinner } from "@/components/ui/Feedback";
-import { PageHeading, SectionHeading, CardTitle as TypoCardTitle, Paragraph, Caption } from "@/components/ui/Typography";
+import { Paragraph } from "@/components/ui/Typography";
 import Button from "@/components/ui/Button";
 import {
   Layers,
   MapPin,
   Clock,
-  Settings,
   AlertTriangle,
   Maximize2,
   Minimize2,
@@ -29,11 +29,9 @@ import {
   Sparkles,
   ShieldAlert,
   ArrowRight,
-  TrendingUp,
   Activity,
-  Users,
 } from "lucide-react";
-import { toast, Toaster } from "sonner";
+
 
 // Dynamic import with SSR disabled to prevent server-side leaflet rendering crash
 const InteractiveMap = dynamic(() => import("@/components/map/InteractiveMap"), {
@@ -42,19 +40,47 @@ const InteractiveMap = dynamic(() => import("@/components/map/InteractiveMap"), 
     <div className="flex h-full w-full items-center justify-center bg-[#0B0F19] rounded-lg">
       <div className="text-center space-y-3">
         <Spinner size="lg" />
-        <Paragraph className="text-text-secondary text-xs">Loading GIS Engine...</Paragraph>
+        <Paragraph className="text-text-secondary text-xs">Loading GIS Engine & Real Data...</Paragraph>
       </div>
     </div>
   ),
 });
 
+// Helper for generating deterministic coordinates for real stations without exact GPS records
+const getStationCoordinates = (stationName: string, districtName: string, index: number): [number, number] => {
+  const known = mockStations.find(
+    (s) => s.name.toLowerCase() === stationName.toLowerCase() || stationName.toLowerCase().includes(s.name.toLowerCase().replace(" ps", ""))
+  );
+  if (known) return [known.lat, known.lng];
+
+  const dist = districtsGeoJSON.find((d) => d.name.toLowerCase() === districtName.toLowerCase());
+  const center = dist ? dist.center : ([14.8, 75.8] as [number, number]);
+
+  const angle = (index * 137.5) * (Math.PI / 180);
+  const radiusOffset = 0.035 + (index % 4) * 0.02;
+  return [
+    center[0] + radiusOffset * Math.cos(angle),
+    center[1] + radiusOffset * Math.sin(angle),
+  ];
+};
+
 export default function MapPage() {
-  // 1. Core States
-  const [selectedMonth, setSelectedMonth] = React.useState("apr"); // jan, feb, mar, apr
+  // 1. Real Data States
+  const [dbCases, setDbCases] = React.useState<AnalyticsCase[]>(mockAnalyticsCases);
+  const [selectedMonth, setSelectedMonth] = React.useState("all");
   const [isFullscreen, setIsFullscreen] = React.useState(false);
   const [selectedCategory, setSelectedCategory] = React.useState("");
   const [selectedSeverity, setSelectedSeverity] = React.useState("");
   const [selectedStatus, setSelectedStatus] = React.useState("");
+
+  // Fetch real database records on mount
+  React.useEffect(() => {
+    analyticsService.getCases(5000).then((casesData) => {
+      if (casesData && casesData.length > 0) {
+        setDbCases(casesData);
+      }
+    });
+  }, []);
 
   // Layer control states
   const [layerControls, setLayerControls] = React.useState({
@@ -69,11 +95,6 @@ export default function MapPage() {
   const [activeDistrict, setActiveDistrict] = React.useState<string | null>(null);
   const [activeStation, setActiveStation] = React.useState<StationMarker | null>(null);
 
-  // Find snapshot for the selected month
-  const activeSnapshot = React.useMemo(() => {
-    return timelineSnapshots.find((s) => s.month === selectedMonth) || timelineSnapshots[3];
-  }, [selectedMonth]);
-
   // Handle Layer Toggle
   const toggleLayer = (layer: keyof typeof layerControls) => {
     setLayerControls((prev) => ({ ...prev, [layer]: !prev[layer] }));
@@ -83,28 +104,111 @@ export default function MapPage() {
   const handleSelectDistrict = (name: string) => {
     setActiveDistrict(name);
     setActiveStation(null);
-    toast.info(`Selected District: ${name}`, {
-      description: "District intelligence summary is active in panels.",
-    });
   };
 
   const handleSelectStation = (station: StationMarker) => {
     setActiveStation(station);
     setActiveDistrict(null);
-    toast.info(`Selected Police Station: ${station.name}`, {
-      description: "Police station operational details are active in panels.",
-    });
   };
 
-  // Re-calculate district metrics based on active selection (Bengaluru has mock counts)
+  // Filtered cases based on map filters
+  const filteredCases = React.useMemo(() => {
+    return dbCases.filter((c) => {
+      if (selectedCategory && c.category !== selectedCategory) return false;
+      if (selectedSeverity && c.severity !== selectedSeverity) return false;
+      if (selectedStatus && c.status !== selectedStatus) return false;
+      if (selectedMonth && selectedMonth !== "all") {
+        if (!c.date.substring(0, 7).includes(selectedMonth)) return false;
+      }
+      return true;
+    });
+  }, [dbCases, selectedCategory, selectedSeverity, selectedStatus, selectedMonth]);
+
+  // Generate distinct months for timeline replay
+  const availableMonths = React.useMemo(() => {
+    const months = Array.from(new Set(dbCases.map((c) => c.date.substring(0, 7)))).sort();
+    return months.length > 0 ? months : ["2026-05", "2026-06"];
+  }, [dbCases]);
+
+  // Dynamic Real Station Markers
+  const realStations: StationMarker[] = React.useMemo(() => {
+    const stationGroups: Record<string, AnalyticsCase[]> = {};
+    filteredCases.forEach((c) => {
+      if (!c.policeStation) return;
+      if (!stationGroups[c.policeStation]) stationGroups[c.policeStation] = [];
+      stationGroups[c.policeStation].push(c);
+    });
+
+    const entries = Object.entries(stationGroups);
+    if (entries.length === 0) return mockStations;
+
+    return entries.map(([name, cases], idx) => {
+      const district = cases[0]?.district || "Bengaluru Urban";
+      const [lat, lng] = getStationCoordinates(name, district, idx);
+      const totalFIRs = cases.length;
+      const activeCases = cases.filter((c) => c.status === "Under Investigation" || c.status === "Awaiting Trial").length;
+      const pendingInvestigations = cases.filter((c) => c.status === "Under Investigation").length;
+      const highSev = cases.filter((c) => c.severity === "High").length;
+      const riskScore = Math.min(100, Math.round((highSev / Math.max(1, totalFIRs)) * 80 + Math.min(20, totalFIRs / 3)));
+
+      return {
+        id: `ST-${idx + 1}`,
+        name,
+        lat,
+        lng,
+        totalFIRs,
+        activeCases,
+        pendingInvestigations,
+        riskScore,
+        district,
+      };
+    });
+  }, [filteredCases]);
+
+  // Dynamic Real Crime Hotspots
+  const realHotspots: HotspotPoint[] = React.useMemo(() => {
+    return realStations
+      .filter((s) => s.totalFIRs >= 3 || s.riskScore >= 45)
+      .map((s) => ({
+        lat: s.lat,
+        lng: s.lng,
+        radius: Math.min(4500, Math.max(1500, s.totalFIRs * 180)),
+        intensity: Math.min(0.85, 0.35 + s.riskScore / 140),
+      }));
+  }, [realStations]);
+
+  // Dynamic Real District Risk Mappings
+  const realDistrictRisks = React.useMemo(() => {
+    const counts: Record<string, { total: number; high: number }> = {};
+    filteredCases.forEach((c) => {
+      if (!counts[c.district]) counts[c.district] = { total: 0, high: 0 };
+      counts[c.district].total += 1;
+      if (c.severity === "High") counts[c.district].high += 1;
+    });
+
+    const risks: Record<string, "High" | "Elevated" | "Moderate" | "Low"> = {};
+    districtsGeoJSON.forEach((dist) => {
+      const data = counts[dist.name] || { total: 0, high: 0 };
+      const ratio = data.total > 0 ? data.high / data.total : 0;
+      if (ratio > 0.35 || data.total > 150) risks[dist.name] = "High";
+      else if (ratio > 0.2 || data.total > 80) risks[dist.name] = "Elevated";
+      else if (data.total > 25) risks[dist.name] = "Moderate";
+      else risks[dist.name] = "Low";
+    });
+    return risks;
+  }, [filteredCases]);
+
+  // Re-calculate district metrics based on active selection and real cases
   const activeDistrictStats = React.useMemo(() => {
     if (!activeDistrict) return null;
-    const stations = mockStations.filter((s) => s.district === activeDistrict);
-    const totalFIRs = stations.reduce((sum, s) => sum + s.totalFIRs, 0);
-    const activeCases = stations.reduce((sum, s) => sum + s.activeCases, 0);
-    const pending = stations.reduce((sum, s) => sum + s.pendingInvestigations, 0);
-    const officerCount = Math.round(activeCases * 1.8 + 5);
-    const risk = activeSnapshot.districtRisks[activeDistrict] || "Low";
+    const distCases = filteredCases.filter(
+      (c) => c.district.toLowerCase() === activeDistrict.toLowerCase() || c.district.includes(activeDistrict) || activeDistrict.includes(c.district)
+    );
+    const totalFIRs = distCases.length;
+    const activeCases = distCases.filter((c) => c.status === "Under Investigation" || c.status === "Awaiting Trial").length;
+    const pending = distCases.filter((c) => c.status === "Under Investigation").length;
+    const officerCount = new Set(distCases.map((c) => c.officerName)).size || Math.round(activeCases * 1.5 + 4);
+    const risk = realDistrictRisks[activeDistrict] || "Low";
 
     return {
       name: activeDistrict,
@@ -114,19 +218,85 @@ export default function MapPage() {
       officerCount,
       risk,
     };
-  }, [activeDistrict, activeSnapshot]);
+  }, [activeDistrict, filteredCases, realDistrictRisks]);
 
-  // Overall Statewide metrics
+  // Overall Statewide metrics from real cases
   const statewideStats = React.useMemo(() => {
-    const totalFIRs = mockStations.reduce((sum, s) => sum + s.totalFIRs, 0);
-    const activeCases = mockStations.reduce((sum, s) => sum + s.activeCases, 0);
-    const pending = mockStations.reduce((sum, s) => sum + s.pendingInvestigations, 0);
+    const totalFIRs = filteredCases.length;
+    const activeCases = filteredCases.filter((c) => c.status === "Under Investigation" || c.status === "Awaiting Trial").length;
+    const pending = filteredCases.filter((c) => c.status === "Under Investigation").length;
     return { totalFIRs, activeCases, pending };
-  }, []);
+  }, [filteredCases]);
+
+  // Dynamic AI Spatial Alerts from real cases
+  const realAlerts: GeographicAlert[] = React.useMemo(() => {
+    if (realStations.length === 0) return mockGeographicAlerts;
+    const sortedStations = [...realStations].sort((a, b) => b.riskScore - a.riskScore);
+    const topStation = sortedStations[0] || realStations[0];
+    const secondStation = sortedStations[1] || realStations[1] || topStation;
+
+    const topStationCases = filteredCases.filter((c) => c.policeStation === topStation.name);
+    const catCounts: Record<string, number> = {};
+    topStationCases.forEach((c) => {
+      catCounts[c.category] = (catCounts[c.category] || 0) + 1;
+    });
+    const topCat = Object.entries(catCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "Cyber Crime";
+
+    return [
+      {
+        id: "REAL-1",
+        type: "Spike",
+        title: `${topCat} Activity Spike`,
+        description: `Real-time database telemetry reports a concentration of ${topStation.totalFIRs} active files originating from ${topStation.name} sector command.`,
+        severity: topStation.riskScore > 65 ? "High" : "Medium",
+        confidence: Math.min(98, Math.round(78 + topStation.riskScore / 5)),
+        recommendation: `Deploy specialized ${topCat.toLowerCase()} task force and coordinate sector perimeter sweeps.`,
+        location: `${topStation.name}, ${topStation.district}`,
+      },
+      {
+        id: "REAL-2",
+        type: "Delay",
+        title: "Investigation Backlog Alert",
+        description: `${secondStation.name} currently monitors ${secondStation.pendingInvestigations} cases under pending investigation status without recent milestone updates.`,
+        severity: secondStation.pendingInvestigations > 12 ? "High" : "Medium",
+        confidence: 91,
+        recommendation: "Assign supervisory audit officers to conduct expedited case file progression reviews.",
+        location: `${secondStation.name}, ${secondStation.district}`,
+      },
+      {
+        id: "REAL-3",
+        type: "High Risk District",
+        title: "Statewide Caseload Threshold",
+        description: `Statewide command center is actively tracking ${statewideStats.activeCases} active investigations across all Karnataka sectors.`,
+        severity: statewideStats.activeCases > 1000 ? "High" : "Medium",
+        confidence: 95,
+        recommendation: "Review tactical patrol deployments across high-density urban transit corridors.",
+        location: "Karnataka Statewide",
+      },
+      {
+        id: "REAL-4",
+        type: "Emerging Hotspot",
+        title: "High Severity Incident Cluster",
+        description: `Spatial clustering detects ${filteredCases.filter((c) => c.severity === "High").length} high-severity incidents logged within the active filtering timeframe.`,
+        severity: "High",
+        confidence: 89,
+        recommendation: "Maintain high-alert surveillance checkpoints and mobile patrol routes.",
+        location: "Major Urban Centers",
+      },
+    ];
+  }, [realStations, filteredCases, statewideStats]);
+
+  const formatMonthName = (ym: string) => {
+    if (!ym || ym === "all") return "All Time";
+    const parts = ym.split("-");
+    if (parts.length < 2) return ym;
+    const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1);
+    return date.toLocaleString("default", { month: "short", year: "numeric" });
+  };
 
   return (
     <div className={`space-y-6 ${isFullscreen ? "fixed inset-0 z-50 bg-background-primary p-6 overflow-y-auto" : ""}`}>
-      <Toaster theme="dark" closeButton />
+
 
       {/* 1. Command Header */}
       {!isFullscreen && (
@@ -134,7 +304,7 @@ export default function MapPage() {
           <div>
             <h2 className="text-page-title">Geographic Intelligence Command Center</h2>
             <Paragraph className="text-text-secondary">
-              Statewide spatial analysis, tactical hotspots mapping, and district operational risk monitoring.
+              Statewide spatial analysis, tactical hotspots mapping, and district operational risk monitoring across Karnataka.
             </Paragraph>
           </div>
           <Button
@@ -154,7 +324,7 @@ export default function MapPage() {
           <div className="flex items-center space-x-2">
             <ShieldAlert className="h-5 w-5 text-accent-primary" />
             <span className="font-bold text-text-primary text-xs uppercase tracking-widest">
-              Geographic Intelligence — Fullscreen Mode
+              Geographic Intelligence — Karnataka Statewide Command
             </span>
           </div>
           <Button
@@ -170,16 +340,15 @@ export default function MapPage() {
 
       {/* 2. Map & Dashboard Grid (Top Row) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        
         {/* Left Side: Map Viewport (lg:col-span-8) */}
         <div className="lg:col-span-8 flex flex-col space-y-4">
-          
           {/* Map canvas container */}
           <div className="relative h-[550px] w-full bg-[#0B0F19] rounded-lg border border-border-subtle overflow-hidden">
             {/* The dynamically imported Leaflet Map wrapper */}
             <InteractiveMap
-              districtRisks={activeSnapshot.districtRisks}
-              hotspots={activeSnapshot.hotspots}
+              districtRisks={realDistrictRisks}
+              hotspots={realHotspots}
+              stations={realStations}
               layerControls={layerControls}
               onSelectDistrict={handleSelectDistrict}
               onSelectStation={handleSelectStation}
@@ -241,14 +410,13 @@ export default function MapPage() {
 
             {/* District click instructions (Floating Bottom Left) */}
             <div className="absolute bottom-3 left-3 z-[1000] bg-background-card/85 backdrop-blur border border-border-subtle rounded px-2.5 py-1 text-[9px] text-text-secondary select-none shadow">
-              Click any district polygon or station node to query operational summaries.
+              Click any Karnataka district polygon or police station marker to query real-time database telemetry.
             </div>
           </div>
         </div>
 
         {/* Right Side: Map Controls & Details Panels (lg:col-span-4) */}
         <div className="lg:col-span-4 space-y-6">
-          
           {/* Global Map Filters */}
           <Card>
             <CardHeader className="pb-3 border-none flex flex-row items-center justify-between">
@@ -266,10 +434,7 @@ export default function MapPage() {
                     ...crimeCategories.map((c) => ({ value: c, label: c })),
                   ]}
                   value={selectedCategory}
-                  onChange={(val) => {
-                    setSelectedCategory(val);
-                    toast.info(val ? `Category Filter: ${val}` : "Showing All Categories");
-                  }}
+                  onChange={(val) => setSelectedCategory(val)}
                 />
               </div>
 
@@ -311,7 +476,6 @@ export default function MapPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-0 select-none">
-              
               {/* Scenario 1: District selected */}
               {activeDistrictStats && (
                 <div className="space-y-4">
@@ -320,7 +484,15 @@ export default function MapPage() {
                       <MapPin className="h-4 w-4 mr-1 text-accent-primary" />
                       {activeDistrictStats.name}
                     </span>
-                    <Badge variant={activeDistrictStats.risk === "High" ? "danger" : activeDistrictStats.risk === "Elevated" ? "warning" : "success"}>
+                    <Badge
+                      variant={
+                        activeDistrictStats.risk === "High"
+                          ? "danger"
+                          : activeDistrictStats.risk === "Elevated"
+                          ? "warning"
+                          : "success"
+                      }
+                    >
                       {activeDistrictStats.risk} Risk
                     </Badge>
                   </div>
@@ -345,8 +517,8 @@ export default function MapPage() {
                   </div>
 
                   <div className="text-[10px] text-text-secondary space-y-1 bg-background-secondary/20 p-2.5 rounded border border-border-subtle">
-                    <span className="font-semibold text-text-primary block mb-0.5">High Priority Crimes:</span>
-                    <span>Phishing frauds, Narcotics corridor transport vectors, residential burglaries.</span>
+                    <span className="font-semibold text-text-primary block mb-0.5">Real-Time Telemetry:</span>
+                    <span>Monitoring live FIR filings, active court procedures, and investigative squad allocations.</span>
                   </div>
 
                   <div className="flex space-x-2 pt-1">
@@ -370,7 +542,11 @@ export default function MapPage() {
                       <MapPin className="h-4 w-4 mr-1 text-warning" />
                       {activeStation.name}
                     </span>
-                    <Badge variant={activeStation.riskScore > 70 ? "danger" : activeStation.riskScore > 50 ? "warning" : "success"}>
+                    <Badge
+                      variant={
+                        activeStation.riskScore > 70 ? "danger" : activeStation.riskScore > 50 ? "warning" : "success"
+                      }
+                    >
                       Risk: {activeStation.riskScore}%
                     </Badge>
                   </div>
@@ -392,12 +568,12 @@ export default function MapPage() {
 
                   <div className="text-[10px] text-text-secondary space-y-1.5 bg-background-secondary/20 p-2.5 rounded border border-border-subtle">
                     <div>
-                      <span className="font-semibold text-text-primary">Operational Station:</span>{" "}
-                      <span>{activeStation.district} Sector Command.</span>
+                      <span className="font-semibold text-text-primary">Operational Sector:</span>{" "}
+                      <span>{activeStation.district} Command Jurisdiction.</span>
                     </div>
                     <div>
-                      <span className="font-semibold text-text-primary">Officer Load Status:</span>{" "}
-                      <span>{Math.round(activeStation.activeCases * 1.5)} squad units assigned.</span>
+                      <span className="font-semibold text-text-primary">Officer Deployment:</span>{" "}
+                      <span>{Math.round(activeStation.activeCases * 1.5 + 2)} active field squads.</span>
                     </div>
                   </div>
 
@@ -422,7 +598,7 @@ export default function MapPage() {
                   </div>
                   <span className="font-semibold text-text-primary text-xs block">Statewide Map Status Summary</span>
                   <Paragraph className="text-[10px] leading-relaxed max-w-xs mx-auto">
-                    Select a colored district polygon or a police station marker to query operational summaries, pending backlogs, and resource allocations.
+                    Select a colored Karnataka district polygon or a police station marker to query live database caseloads and tactical deployments.
                   </Paragraph>
 
                   <div className="grid grid-cols-3 gap-2 border-t border-border-subtle pt-3 text-[10px]">
@@ -435,13 +611,14 @@ export default function MapPage() {
                       <span className="font-bold text-text-primary text-xs mt-0.5 block">{statewideStats.activeCases}</span>
                     </div>
                     <div>
-                      <span className="text-text-secondary block">Active Month</span>
-                      <span className="font-bold text-accent-primary text-xs mt-0.5 block uppercase">{selectedMonth}</span>
+                      <span className="text-text-secondary block">Timeline Slice</span>
+                      <span className="font-bold text-accent-primary text-xs mt-0.5 block uppercase">
+                        {formatMonthName(selectedMonth).split(" ")[0]}
+                      </span>
                     </div>
                   </div>
                 </div>
               )}
-
             </CardContent>
           </Card>
         </div>
@@ -452,12 +629,12 @@ export default function MapPage() {
         <div className="flex items-center space-x-1.5 px-1 select-none">
           <Activity className="h-4 w-4 text-analytics" />
           <span className="text-xs uppercase font-bold tracking-wider text-text-primary">
-            Live Spatial Alerts Feed
+            Live Spatial Alerts Feed (AI Data-Driven)
           </span>
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          {mockGeographicAlerts.map((alert) => (
+          {realAlerts.map((alert) => (
             <Card key={alert.id} className="flex flex-col h-40 justify-between">
               <CardContent className="p-4 flex flex-col justify-between h-full space-y-2">
                 <div className="flex justify-between items-start">
@@ -489,41 +666,48 @@ export default function MapPage() {
               <Clock className="h-4 w-4 text-warning mr-1.5" />
               Historical Crime Evolution Timeline Replay
             </span>
-            <Badge variant="primary">{activeSnapshot.label} Snapshot</Badge>
+            <Badge variant="primary">{formatMonthName(selectedMonth)} Snapshot</Badge>
           </div>
-          
+
           <div className="flex flex-col space-y-4">
             {/* Horizontal Step nodes for month selection */}
-            <div className="grid grid-cols-4 gap-2 text-center select-none">
-              {timelineSnapshots.map((snap) => (
-                <button
-                  key={snap.month}
-                  onClick={() => {
-                    setSelectedMonth(snap.month);
-                    toast.success(`Replayed Timeline: ${snap.label}`, {
-                      description: `District risks and hotspot coordinates synchronized. Active caseload: ${snap.totalCases}.`,
-                    });
-                  }}
-                  className={`py-2 px-3 border rounded text-[11px] font-semibold transition-all ${
-                    selectedMonth === snap.month
-                      ? "bg-accent-primary/10 border-accent-primary text-text-primary"
-                      : "bg-background-secondary/20 border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-default"
-                  }`}
-                >
-                  {snap.label.split(" ")[0]}
-                </button>
-              ))}
+            <div className="flex flex-wrap gap-2 text-center select-none">
+              <button
+                onClick={() => setSelectedMonth("all")}
+                className={`py-2 px-4 border rounded text-[11px] font-semibold transition-all ${
+                  selectedMonth === "all"
+                    ? "bg-accent-primary/10 border-accent-primary text-text-primary shadow-sm"
+                    : "bg-background-secondary/20 border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-default"
+                }`}
+              >
+                All Time ({dbCases.length})
+              </button>
+              {availableMonths.map((ym) => {
+                const count = dbCases.filter((c) => c.date.substring(0, 7) === ym).length;
+                return (
+                  <button
+                    key={ym}
+                    onClick={() => setSelectedMonth(ym)}
+                    className={`py-2 px-4 border rounded text-[11px] font-semibold transition-all ${
+                      selectedMonth === ym
+                        ? "bg-accent-primary/10 border-accent-primary text-text-primary shadow-sm"
+                        : "bg-background-secondary/20 border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-default"
+                    }`}
+                  >
+                    {formatMonthName(ym)} ({count})
+                  </button>
+                );
+              })}
             </div>
 
             <div className="flex justify-between items-center text-[10px] text-text-secondary px-1 select-none">
-              <span>Start (Jan 2026: {timelineSnapshots[0].totalCases} Cases)</span>
-              <span>Active Hotspots updated in Real-Time</span>
-              <span>Current (Apr 2026: {timelineSnapshots[3].totalCases} Cases)</span>
+              <span>Database Telemetry Active</span>
+              <span>Hotspots & Risk Borders Computed in Real-Time</span>
+              <span>Total Active Dataset: {dbCases.length} Cases</span>
             </div>
           </div>
         </CardContent>
       </Card>
-
     </div>
   );
 }

@@ -26,7 +26,9 @@ export default function Chart({ option, className, style }: ChartProps) {
       <ReactECharts
         option={option}
         style={{ height: "100%", width: "100%" }}
-        opts={{ renderer: "canvas" }}
+        opts={{ renderer: "svg" }}
+        notMerge={true}
+        lazyUpdate={true}
       />
     </div>
   );

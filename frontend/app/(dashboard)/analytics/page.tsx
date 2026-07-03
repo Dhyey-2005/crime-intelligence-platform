@@ -11,6 +11,7 @@ import {
   crimeCategories,
   AnalyticsCase,
 } from "@/constants/mockAnalyticsData";
+import { analyticsService, DashboardSummaryResponse } from "@/services/analyticsService";
 import { tokens } from "@/styles/tokens";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { Select, Input, Checkbox } from "@/components/ui/Form";
@@ -40,14 +41,91 @@ import {
   ArrowUpDown,
   BookOpen,
   PieChart,
+  RefreshCw,
+  SlidersHorizontal,
+  ChevronDown,
+  ChevronUp,
+  X,
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
 
 export default function AnalyticsPage() {
   const { user } = useAuthStore();
 
+  // Live PostgreSQL Backend Integration
+  const [liveSummary, setLiveSummary] = React.useState<DashboardSummaryResponse | null>(null);
+  const [isBackendLive, setIsBackendLive] = React.useState(false);
+  const [dbCases, setDbCases] = React.useState<AnalyticsCase[]>(mockAnalyticsCases);
+  const [dbDistricts, setDbDistricts] = React.useState<string[]>(districts);
+  const [dbPoliceStationsMap, setDbPoliceStationsMap] = React.useState<Record<string, string[]>>(policeStationsMap);
+  const [dbCategories, setDbCategories] = React.useState<string[]>(crimeCategories);
+  const [dbSubcategoryMap, setDbSubcategoryMap] = React.useState<Record<string, string[]>>(subcategoryMap);
+  const [dbStatuses, setDbStatuses] = React.useState<string[]>(["Under Investigation", "Charge Sheet Filed", "Awaiting Trial", "Closed"]);
+  const [dbOfficers, setDbOfficers] = React.useState<string[]>(mockOfficers);
+
+  const syncRealTimeData = React.useCallback((isManual = false) => {
+    if (isManual) {
+      toast.info("Synchronizing real-time telemetry from PostgreSQL ksp_db...");
+    }
+    analyticsService.getSummary().then((data) => {
+      if (data && data.total_cases > 0) {
+        setLiveSummary(data);
+        setIsBackendLive(true);
+      }
+    });
+
+    analyticsService.getCases(5000).then((casesData) => {
+      if (casesData && casesData.length > 0) {
+        setDbCases(casesData);
+        if (isManual) toast.success(`Synced ${casesData.length} live case records from database.`);
+      }
+    });
+
+    analyticsService.getFilterOptions().then((filterData) => {
+      if (filterData) {
+        if (filterData.districts && filterData.districts.length > 0) {
+          setDbDistricts(filterData.districts);
+          if (filterData.districts.length > 1) {
+            setCompDistrict1((prev) => prev || filterData.districts[0]);
+            setCompDistrict2((prev) => prev || filterData.districts[1]);
+          }
+        }
+        if (filterData.police_stations && Object.keys(filterData.police_stations).length > 0) {
+          setDbPoliceStationsMap(filterData.police_stations);
+          const allStations = Object.values(filterData.police_stations).flat();
+          if (allStations.length > 1) {
+            setCompStation1((prev) => prev || allStations[0]);
+            setCompStation2((prev) => prev || allStations[1]);
+          }
+        }
+        if (filterData.categories && filterData.categories.length > 0) {
+          setDbCategories(filterData.categories);
+          if (filterData.categories.length > 1) {
+            setCompCategory1((prev) => prev || filterData.categories[0]);
+            setCompCategory2((prev) => prev || filterData.categories[1]);
+          }
+        }
+        if (filterData.subcategories && Object.keys(filterData.subcategories).length > 0) {
+          setDbSubcategoryMap(filterData.subcategories);
+        }
+        if (filterData.statuses && filterData.statuses.length > 0) {
+          setDbStatuses(filterData.statuses);
+        }
+        if (filterData.officers && filterData.officers.length > 0) {
+          setDbOfficers(filterData.officers);
+        }
+      }
+    });
+  }, []);
+
+  React.useEffect(() => {
+    syncRealTimeData(false);
+  }, [syncRealTimeData]);
+
+
   // 1. Global Filter States
-  const [selectedMonth, setSelectedMonth] = React.useState("all"); // all, 05, 06
+  const [startMonth, setStartMonth] = React.useState("all"); // From Month
+  const [endMonth, setEndMonth] = React.useState("all"); // To Month
   const [selectedDistrict, setSelectedDistrict] = React.useState("");
   const [selectedStation, setSelectedStation] = React.useState("");
   const [selectedCategory, setSelectedCategory] = React.useState("");
@@ -56,10 +134,11 @@ export default function AnalyticsPage() {
   const [selectedOfficer, setSelectedOfficer] = React.useState("");
   const [selectedSeverity, setSelectedSeverity] = React.useState("");
   const [selectedRisk, setSelectedRisk] = React.useState("");
+  const [showAdvancedFilters, setShowAdvancedFilters] = React.useState(false);
 
   // Comparative states
-  const [compDistrict1, setCompDistrict1] = React.useState("Bengaluru City");
-  const [compDistrict2, setCompDistrict2] = React.useState("Mysuru City");
+  const [compDistrict1, setCompDistrict1] = React.useState("Bengaluru Urban");
+  const [compDistrict2, setCompDistrict2] = React.useState("Mysuru");
   const [compStation1, setCompStation1] = React.useState("Koramangala PS");
   const [compStation2, setCompStation2] = React.useState("Devaraja PS");
   const [compCategory1, setCompCategory1] = React.useState("Cybercrime");
@@ -76,18 +155,30 @@ export default function AnalyticsPage() {
 
   const availableStations = React.useMemo(() => {
     if (!selectedDistrict) return [];
-    return policeStationsMap[selectedDistrict] || [];
-  }, [selectedDistrict]);
+    return dbPoliceStationsMap[selectedDistrict] || [];
+  }, [selectedDistrict, dbPoliceStationsMap]);
 
   const availableSubcategories = React.useMemo(() => {
     if (!selectedCategory) return [];
-    return subcategoryMap[selectedCategory] || [];
-  }, [selectedCategory]);
+    return dbSubcategoryMap[selectedCategory] || [];
+  }, [selectedCategory, dbSubcategoryMap]);
+
+  const availableMonths = React.useMemo(() => {
+    const months = new Set<string>();
+    dbCases.forEach((c) => {
+      if (c.date && c.date.length >= 7) {
+        months.add(c.date.substring(0, 7));
+      }
+    });
+    return Array.from(months).sort().reverse();
+  }, [dbCases]);
 
   // Main Filtered Dataset
   const filteredCases = React.useMemo(() => {
-    return mockAnalyticsCases.filter((c) => {
-      if (selectedMonth !== "all" && c.date.split("-")[1] !== selectedMonth) return false;
+    return dbCases.filter((c) => {
+      const caseMonth = c.date ? c.date.substring(0, 7) : "";
+      if (startMonth !== "all" && caseMonth < startMonth) return false;
+      if (endMonth !== "all" && caseMonth > endMonth) return false;
       if (selectedDistrict && c.district !== selectedDistrict) return false;
       if (selectedStation && c.policeStation !== selectedStation) return false;
       if (selectedCategory && c.category !== selectedCategory) return false;
@@ -99,7 +190,35 @@ export default function AnalyticsPage() {
       return true;
     });
   }, [
-    selectedMonth,
+    startMonth,
+    endMonth,
+    selectedDistrict,
+    selectedStation,
+    selectedCategory,
+    selectedSubcategory,
+    selectedStatus,
+    selectedOfficer,
+    selectedSeverity,
+    selectedRisk,
+    dbCases,
+  ]);
+
+  const activeFiltersCount = React.useMemo(() => {
+    let count = 0;
+    if (startMonth !== "all") count++;
+    if (endMonth !== "all") count++;
+    if (selectedDistrict) count++;
+    if (selectedStation) count++;
+    if (selectedCategory) count++;
+    if (selectedSubcategory) count++;
+    if (selectedStatus) count++;
+    if (selectedOfficer) count++;
+    if (selectedSeverity) count++;
+    if (selectedRisk) count++;
+    return count;
+  }, [
+    startMonth,
+    endMonth,
     selectedDistrict,
     selectedStation,
     selectedCategory,
@@ -111,7 +230,8 @@ export default function AnalyticsPage() {
   ]);
 
   const resetAllFilters = () => {
-    setSelectedMonth("all");
+    setStartMonth("all");
+    setEndMonth("all");
     setSelectedDistrict("");
     setSelectedStation("");
     setSelectedCategory("");
@@ -131,20 +251,42 @@ export default function AnalyticsPage() {
       ? Math.round(filteredCases.reduce((sum, c) => sum + c.durationDays, 0) / total)
       : 0;
 
-    // Resolution rate (closed cases)
-    const closed = filteredCases.filter((c) => c.status === "Closed").length;
+    // Resolution rate (closed / charge sheeted cases in DB)
+    const closed = filteredCases.filter((c) => 
+      c.status.toLowerCase().includes("closed") || 
+      c.status.toLowerCase().includes("compounded") ||
+      c.status.toLowerCase().includes("sheet")
+    ).length;
     const resolutionRate = total > 0 ? Math.round((closed / total) * 100) : 100;
 
-    // Active cases
-    const active = filteredCases.filter((c) => c.status === "Under Investigation" || c.status === "Awaiting Trial").length;
+    // Active cases in DB
+    const active = filteredCases.filter((c) => 
+      !c.status.toLowerCase().includes("closed") && 
+      !c.status.toLowerCase().includes("compounded")
+    ).length;
 
-    // Growth Rate (June vs May Cases)
-    const mayCases = filteredCases.filter((c) => c.date.split("-")[1] === "05").length;
-    const juneCases = filteredCases.filter((c) => c.date.split("-")[1] === "06").length;
-    const growth = mayCases > 0 ? Math.round(((juneCases - mayCases) / mayCases) * 100) : 0;
+    // Growth Rate (Latest Month vs Previous Month in filteredCases)
+    const distinctMonths = Array.from(new Set(filteredCases.map((c) => c.date.substring(0, 7)))).sort().reverse();
+    const latestMonth = endMonth !== "all" ? endMonth : (distinctMonths[0] || "");
+    const prevMonth = (startMonth !== "all" && startMonth !== latestMonth)
+      ? startMonth
+      : (distinctMonths[1] || distinctMonths[0] || "");
+    const latestCount = filteredCases.filter((c) => c.date.startsWith(latestMonth)).length;
+    const prevCount = filteredCases.filter((c) => c.date.startsWith(prevMonth)).length;
+    const growth = prevCount > 0 ? Math.round(((latestCount - prevCount) / prevCount) * 100) : 0;
 
     // Average daily cases (based on 30 days)
     const avgDaily = parseFloat((total / 30).toFixed(1));
+
+    const formatMonthName = (ym: string) => {
+      if (!ym) return "Latest";
+      const parts = ym.split("-");
+      if (parts.length < 2) return ym;
+      const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1);
+      return date.toLocaleString("default", { month: "short", year: "numeric" });
+    };
+    const latestMonthName = formatMonthName(latestMonth) || "Latest";
+    const prevMonthName = formatMonthName(prevMonth) || "Previous";
 
     return {
       total,
@@ -153,70 +295,128 @@ export default function AnalyticsPage() {
       resolutionRate,
       active,
       avgDaily,
+      latestMonthName,
+      prevMonthName,
     };
-  }, [filteredCases]);
+  }, [filteredCases, startMonth, endMonth]);
 
   // 3. ECharts options configurations
-  // Chart 1: Crime Trend Line (May vs June timeline)
+  // Chart 1: Crime Trend Line (Dynamic Timeline)
   const trendOption = React.useMemo(() => {
-    const mayCounts = Array(30).fill(0);
-    const juneCounts = Array(30).fill(0);
+    const distinctMonths = Array.from(new Set(filteredCases.map((c) => c.date.substring(0, 7)))).sort().reverse();
+    const latestMonth = endMonth !== "all" ? endMonth : (distinctMonths[0] || "2026-06");
+    const prevMonth = (startMonth !== "all" && startMonth !== latestMonth)
+      ? startMonth
+      : (distinctMonths[1] || distinctMonths[0] || "2026-05");
+
+    const countsLatest = Array(31).fill(0);
+    const countsPrev = Array(31).fill(0);
 
     filteredCases.forEach((c) => {
-      const parts = c.date.split("-");
-      const month = parts[1];
-      const day = parseInt(parts[2]) - 1;
-      if (day >= 0 && day < 30) {
-        if (month === "05") mayCounts[day] += 1;
-        if (month === "06") juneCounts[day] += 1;
+      const ym = c.date.substring(0, 7);
+      const day = parseInt(c.date.split("-")[2], 10) - 1;
+      if (day >= 0 && day < 31) {
+        if (ym === latestMonth) countsLatest[day] += 1;
+        if (ym === prevMonth && prevMonth !== latestMonth) countsPrev[day] += 1;
       }
     });
 
-    const days = Array.from({ length: 30 }, (_, i) => `${i + 1}`);
+    const days = Array.from({ length: 31 }, (_, i) => `${i + 1}`);
+
+    const formatMonthName = (ym: string) => {
+      if (!ym) return ym;
+      const parts = ym.split("-");
+      if (parts.length < 2) return ym;
+      const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1);
+      return date.toLocaleString("default", { month: "short", year: "numeric" });
+    };
+    const latestName = formatMonthName(latestMonth);
+    const prevName = formatMonthName(prevMonth);
+
+    const series: any[] = [
+      {
+        name: `${latestName} Trend`,
+        type: "line",
+        smooth: 0.35,
+        showSymbol: false,
+        symbol: "circle",
+        symbolSize: 6,
+        data: countsLatest,
+        itemStyle: { color: "#06b6d4" },
+        lineStyle: { width: 3, shadowColor: "rgba(6, 182, 212, 0.4)", shadowBlur: 10 },
+        areaStyle: {
+          color: {
+            type: "linear",
+            x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: "rgba(6, 182, 212, 0.35)" },
+              { offset: 1, color: "rgba(6, 182, 212, 0.0)" },
+            ],
+          },
+        },
+      },
+    ];
+
+    if (prevMonth !== latestMonth) {
+      series.push({
+        name: `${prevName} Trend`,
+        type: "line",
+        smooth: 0.35,
+        showSymbol: false,
+        symbol: "circle",
+        symbolSize: 6,
+        data: countsPrev,
+        itemStyle: { color: "#a855f7" },
+        lineStyle: { width: 2.5, type: "dashed", color: "#a855f7" },
+        areaStyle: {
+          color: {
+            type: "linear",
+            x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: "rgba(168, 85, 247, 0.18)" },
+              { offset: 1, color: "rgba(168, 85, 247, 0.0)" },
+            ],
+          },
+        },
+      });
+    }
 
     return {
       backgroundColor: "transparent",
       tooltip: {
         trigger: "axis",
-        textStyle: { color: tokens.colors.text.primary, fontSize: 10 },
-        backgroundColor: tokens.colors.background.card,
-        borderColor: tokens.colors.border.default,
+        backgroundColor: "rgba(15, 23, 42, 0.95)",
+        borderColor: "rgba(59, 130, 246, 0.3)",
+        borderWidth: 1,
+        padding: [12, 16],
+        textStyle: { color: "#f8fafc", fontSize: 12 },
+        extraCssText: "backdrop-filter: blur(12px); border-radius: 10px; box-shadow: 0 20px 30px -10px rgba(0, 0, 0, 0.7);",
       },
       legend: {
-        textStyle: { color: tokens.colors.text.secondary, fontSize: 9 },
+        textStyle: { color: tokens.colors.text.secondary, fontSize: 10, fontWeight: 500 },
         bottom: 0,
+        itemWidth: 14,
+        itemHeight: 8,
       },
-      grid: { left: "3%", right: "4%", bottom: "12%", top: "8%", containLabel: true },
+      grid: { left: "2%", right: "3%", bottom: "12%", top: "12%", containLabel: true },
       xAxis: {
         type: "category",
         boundaryGap: false,
-        data: days,
-        axisLine: { lineStyle: { color: tokens.colors.border.default } },
-        axisLabel: { color: tokens.colors.text.secondary, fontSize: 8 },
+        data: days.map((d) => `Day ${d}`),
+        axisLine: { lineStyle: { color: "rgba(255, 255, 255, 0.15)" } },
+        axisLabel: { color: tokens.colors.text.secondary, fontSize: 10, margin: 12 },
+        splitLine: { show: false },
       },
       yAxis: {
         type: "value",
-        splitLine: { lineStyle: { color: tokens.colors.border.subtle } },
-        axisLabel: { color: tokens.colors.text.secondary, fontSize: 8 },
+        name: "Case Count",
+        nameTextStyle: { color: tokens.colors.text.secondary, fontSize: 10, padding: [0, 0, 8, 0] },
+        splitLine: { lineStyle: { type: "dashed", color: "rgba(255, 255, 255, 0.08)" } },
+        axisLabel: { color: tokens.colors.text.secondary, fontSize: 10 },
       },
-      series: [
-        {
-          name: "May 2026 Trend",
-          type: "line",
-          smooth: true,
-          data: mayCounts,
-          itemStyle: { color: tokens.colors.text.secondary },
-        },
-        {
-          name: "June 2026 Trend",
-          type: "line",
-          smooth: true,
-          data: juneCounts,
-          itemStyle: { color: tokens.colors.accent.primary },
-        },
-      ],
+      series,
     };
-  }, [filteredCases]);
+  }, [filteredCases, startMonth, endMonth]);
 
   // Chart 2: Crime by Category Pie Chart
   const categoryOption = React.useMemo(() => {
@@ -231,31 +431,40 @@ export default function AnalyticsPage() {
       backgroundColor: "transparent",
       tooltip: {
         trigger: "item",
-        formatter: "{b}: {c} ({d}%)",
-        textStyle: { color: tokens.colors.text.primary, fontSize: 10 },
-        backgroundColor: tokens.colors.background.card,
-        borderColor: tokens.colors.border.default,
+        formatter: "{b}: <span style='font-weight:bold;color:#fff;'>{c}</span> ({d}%)",
+        backgroundColor: "rgba(15, 23, 42, 0.95)",
+        borderColor: "rgba(59, 130, 246, 0.3)",
+        borderWidth: 1,
+        padding: [10, 14],
+        textStyle: { color: "#f8fafc", fontSize: 12 },
+        extraCssText: "backdrop-filter: blur(12px); border-radius: 10px; box-shadow: 0 20px 30px -10px rgba(0, 0, 0, 0.7);",
       },
       legend: {
         orient: "horizontal",
         bottom: 0,
-        textStyle: { color: tokens.colors.text.secondary, fontSize: 8 },
-        itemWidth: 8,
-        itemHeight: 8,
+        textStyle: { color: tokens.colors.text.secondary, fontSize: 10, fontWeight: 500 },
+        itemWidth: 10,
+        itemHeight: 10,
+        itemGap: 16,
       },
       series: [
         {
           type: "pie",
-          radius: "60%",
-          center: ["50%", "45%"],
+          radius: ["46%", "72%"],
+          center: ["50%", "44%"],
+          itemStyle: {
+            borderRadius: 6,
+            borderColor: "#0f172a",
+            borderWidth: 2,
+          },
           data: data.length > 0 ? data : [{ name: "No Cases", value: 0 }],
           color: [
-            tokens.colors.accent.primary,
-            tokens.colors.analytics,
-            tokens.colors.ai,
-            tokens.colors.warning,
-            tokens.colors.danger,
-            tokens.colors.success,
+            "#06b6d4",
+            "#3b82f6",
+            "#8b5cf6",
+            "#ec4899",
+            "#f59e0b",
+            "#10b981",
           ],
           label: { show: false },
         },
@@ -265,12 +474,12 @@ export default function AnalyticsPage() {
 
   // Chart 3: Comparative Districts Bar Chart
   const comparativeDistrictOption = React.useMemo(() => {
-    const c1Cases = mockAnalyticsCases.filter((c) => c.district === compDistrict1);
-    const c2Cases = mockAnalyticsCases.filter((c) => c.district === compDistrict2);
+    const c1Cases = filteredCases.filter((c) => c.district === compDistrict1);
+    const c2Cases = filteredCases.filter((c) => c.district === compDistrict2);
 
     const c1Counts: Record<string, number> = {};
     const c2Counts: Record<string, number> = {};
-    crimeCategories.forEach((cat) => {
+    dbCategories.forEach((cat) => {
       c1Counts[cat] = 0;
       c2Counts[cat] = 0;
     });
@@ -298,7 +507,7 @@ export default function AnalyticsPage() {
       grid: { left: "3%", right: "4%", bottom: "15%", top: "8%", containLabel: true },
       xAxis: {
         type: "category",
-        data: crimeCategories.map((c) => c.split(" ")[0]),
+        data: dbCategories.map((c) => c.split(" ")[0]),
         axisLine: { lineStyle: { color: tokens.colors.border.default } },
         axisLabel: { color: tokens.colors.text.secondary, fontSize: 8 },
       },
@@ -312,7 +521,7 @@ export default function AnalyticsPage() {
         { name: compDistrict2, type: "bar", data: Object.values(c2Counts), itemStyle: { color: tokens.colors.ai } },
       ],
     };
-  }, [compDistrict1, compDistrict2]);
+  }, [compDistrict1, compDistrict2, filteredCases, dbCategories]);
 
   // Chart 4: Demographics - Accused vs Victim Age distribution
   const demographicsAgeOption = React.useMemo(() => {
@@ -470,41 +679,101 @@ export default function AnalyticsPage() {
             Strategic analysis, regional comparisons, and demographics data exploration center.
           </Paragraph>
         </div>
+        <div className="flex items-center space-x-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => syncRealTimeData(true)}
+            leftIcon={<RefreshCw className="h-3.5 w-3.5 text-cyan-400" />}
+            className="text-xs font-semibold"
+          >
+            Live Data Sync
+          </Button>
+        </div>
       </div>
 
       {/* 2. Global Filters Card */}
-      <Card>
+      <Card className="border-border-default/80 bg-background-card/90 backdrop-blur-md shadow-md">
         <CardContent className="p-4 flex flex-col space-y-3">
-          <div className="flex items-center justify-between border-b border-border-subtle pb-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-text-primary flex items-center">
-              <Filter className="h-4 w-4 text-analytics mr-1.5" />
-              Strategic Analytics Filters
-            </span>
-            <Button variant="ghost" size="sm" onClick={resetAllFilters} className="text-[10px] h-7 px-2">
-              Clear Filters
-            </Button>
+          <div className="flex items-center justify-between border-b border-border-subtle pb-2.5">
+            <div className="flex items-center space-x-2.5">
+              <span className="text-xs font-bold uppercase tracking-wider text-text-primary flex items-center">
+                <Filter className="h-3.5 w-3.5 text-analytics mr-1.5" />
+                Strategic Analytics Filters
+              </span>
+              {activeFiltersCount > 0 && (
+                <span className="px-2 py-0.5 text-[9px] font-bold bg-analytics/20 text-analytics border border-analytics/40 rounded-full">
+                  {activeFiltersCount} Active
+                </span>
+              )}
+            </div>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                leftIcon={<SlidersHorizontal className="h-3 w-3 text-cyan-400" />}
+                rightIcon={showAdvancedFilters ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                className="text-[11px] h-7 px-2.5 text-text-secondary hover:text-text-primary border border-border-subtle/60 rounded-md"
+              >
+                Advanced Filters
+              </Button>
+              {activeFiltersCount > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={resetAllFilters}
+                  leftIcon={<X className="h-3 w-3" />}
+                  className="text-[10px] h-7 px-2 text-danger hover:text-danger-hover hover:bg-danger/10"
+                >
+                  Clear ({activeFiltersCount})
+                </Button>
+              )}
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-2">
+          {/* Primary Top Filters Row (5 Columns) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             <div>
-              <label className="text-[9px] font-semibold text-text-secondary block mb-1">Timeframe</label>
+              <label className="text-[9px] font-semibold text-text-secondary uppercase tracking-wider block mb-1">From Month</label>
               <Select
                 options={[
-                  { value: "all", label: "All Cases" },
-                  { value: "05", label: "May 2026" },
-                  { value: "06", label: "June 2026" },
+                  { value: "all", label: "Any Start Month" },
+                  ...availableMonths.map((m) => {
+                    const parts = m.split("-");
+                    const dateObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1);
+                    const label = dateObj.toLocaleString("default", { month: "short", year: "numeric" });
+                    return { value: m, label: label || m };
+                  }),
                 ]}
-                value={selectedMonth}
-                onChange={(val) => setSelectedMonth(val)}
+                value={startMonth}
+                onChange={(val) => setStartMonth(val)}
               />
             </div>
 
             <div>
-              <label className="text-[9px] font-semibold text-text-secondary block mb-1">District</label>
+              <label className="text-[9px] font-semibold text-text-secondary uppercase tracking-wider block mb-1">To Month</label>
+              <Select
+                options={[
+                  { value: "all", label: "Any End Month" },
+                  ...availableMonths.map((m) => {
+                    const parts = m.split("-");
+                    const dateObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1);
+                    const label = dateObj.toLocaleString("default", { month: "short", year: "numeric" });
+                    return { value: m, label: label || m };
+                  }),
+                ]}
+                value={endMonth}
+                onChange={(val) => setEndMonth(val)}
+              />
+            </div>
+
+            <div>
+              <label className="text-[9px] font-semibold text-text-secondary uppercase tracking-wider block mb-1">District</label>
               <Select
                 options={[
                   { value: "", label: "All Districts" },
-                  ...districts.map((d) => ({ value: d, label: d })),
+                  ...dbDistricts.map((d) => ({ value: d, label: d })),
                 ]}
                 value={selectedDistrict}
                 onChange={(val) => setSelectedDistrict(val)}
@@ -512,7 +781,7 @@ export default function AnalyticsPage() {
             </div>
 
             <div>
-              <label className="text-[9px] font-semibold text-text-secondary block mb-1">Police Station</label>
+              <label className="text-[9px] font-semibold text-text-secondary uppercase tracking-wider block mb-1">Police Station</label>
               <Select
                 options={[
                   { value: "", label: "All Stations" },
@@ -525,85 +794,87 @@ export default function AnalyticsPage() {
             </div>
 
             <div>
-              <label className="text-[9px] font-semibold text-text-secondary block mb-1">Category</label>
+              <label className="text-[9px] font-semibold text-text-secondary uppercase tracking-wider block mb-1">Crime Category</label>
               <Select
                 options={[
                   { value: "", label: "All Categories" },
-                  ...crimeCategories.map((c) => ({ value: c, label: c })),
+                  ...dbCategories.map((c) => ({ value: c, label: c })),
                 ]}
                 value={selectedCategory}
                 onChange={(val) => setSelectedCategory(val)}
               />
             </div>
-
-            <div>
-              <label className="text-[9px] font-semibold text-text-secondary block mb-1">Subcategory</label>
-              <Select
-                options={[
-                  { value: "", label: "All Subcats" },
-                  ...availableSubcategories.map((sc) => ({ value: sc, label: sc })),
-                ]}
-                value={selectedSubcategory}
-                onChange={(val) => setSelectedSubcategory(val)}
-                disabled={!selectedCategory}
-              />
-            </div>
-
-            <div>
-              <label className="text-[9px] font-semibold text-text-secondary block mb-1">Case Status</label>
-              <Select
-                options={[
-                  { value: "", label: "All Statuses" },
-                  { value: "Under Investigation", label: "Under Investigation" },
-                  { value: "Charge Sheet Filed", label: "Charge Sheet Filed" },
-                  { value: "Awaiting Trial", label: "Awaiting Trial" },
-                  { value: "Closed", label: "Closed" },
-                ]}
-                value={selectedStatus}
-                onChange={(val) => setSelectedStatus(val)}
-              />
-            </div>
-
-            <div>
-              <label className="text-[9px] font-semibold text-text-secondary block mb-1">Officer</label>
-              <Select
-                options={[
-                  { value: "", label: "All Officers" },
-                  ...mockOfficers.map((o) => ({ value: o, label: o })),
-                ]}
-                value={selectedOfficer}
-                onChange={(val) => setSelectedOfficer(val)}
-              />
-            </div>
-
-            <div>
-              <label className="text-[9px] font-semibold text-text-secondary block mb-1">Severity</label>
-              <Select
-                options={[
-                  { value: "", label: "All Severities" },
-                  { value: "High", label: "High" },
-                  { value: "Medium", label: "Medium" },
-                  { value: "Low", label: "Low" },
-                ]}
-                value={selectedSeverity}
-                onChange={(val) => setSelectedSeverity(val)}
-              />
-            </div>
-
-            <div>
-              <label className="text-[9px] font-semibold text-text-secondary block mb-1">Risk Index</label>
-              <Select
-                options={[
-                  { value: "", label: "All Risk Levels" },
-                  { value: "High", label: "High" },
-                  { value: "Medium", label: "Medium" },
-                  { value: "Low", label: "Low" },
-                ]}
-                value={selectedRisk}
-                onChange={(val) => setSelectedRisk(val)}
-              />
-            </div>
           </div>
+
+          {/* Collapsible Advanced Filters Section (5 Columns) */}
+          {showAdvancedFilters && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-3 border-t border-border-subtle/60 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div>
+                <label className="text-[9px] font-semibold text-text-secondary uppercase tracking-wider block mb-1">Subcategory</label>
+                <Select
+                  options={[
+                    { value: "", label: "All Subcats" },
+                    ...availableSubcategories.map((sc) => ({ value: sc, label: sc })),
+                  ]}
+                  value={selectedSubcategory}
+                  onChange={(val) => setSelectedSubcategory(val)}
+                  disabled={!selectedCategory}
+                />
+              </div>
+
+              <div>
+                <label className="text-[9px] font-semibold text-text-secondary uppercase tracking-wider block mb-1">Case Status</label>
+                <Select
+                  options={[
+                    { value: "", label: "All Statuses" },
+                    ...dbStatuses.map((s) => ({ value: s, label: s })),
+                  ]}
+                  value={selectedStatus}
+                  onChange={(val) => setSelectedStatus(val)}
+                />
+              </div>
+
+              <div>
+                <label className="text-[9px] font-semibold text-text-secondary uppercase tracking-wider block mb-1">Officer Assigned</label>
+                <Select
+                  options={[
+                    { value: "", label: "All Officers" },
+                    ...dbOfficers.map((o) => ({ value: o, label: o })),
+                  ]}
+                  value={selectedOfficer}
+                  onChange={(val) => setSelectedOfficer(val)}
+                />
+              </div>
+
+              <div>
+                <label className="text-[9px] font-semibold text-text-secondary uppercase tracking-wider block mb-1">Severity Level</label>
+                <Select
+                  options={[
+                    { value: "", label: "All Severities" },
+                    { value: "High", label: "High" },
+                    { value: "Medium", label: "Medium" },
+                    { value: "Low", label: "Low" },
+                  ]}
+                  value={selectedSeverity}
+                  onChange={(val) => setSelectedSeverity(val)}
+                />
+              </div>
+
+              <div>
+                <label className="text-[9px] font-semibold text-text-secondary uppercase tracking-wider block mb-1">Risk Index</label>
+                <Select
+                  options={[
+                    { value: "", label: "All Risk Levels" },
+                    { value: "High", label: "High" },
+                    { value: "Medium", label: "Medium" },
+                    { value: "Low", label: "Low" },
+                  ]}
+                  value={selectedRisk}
+                  onChange={(val) => setSelectedRisk(val)}
+                />
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -620,7 +891,7 @@ export default function AnalyticsPage() {
                 {/* Summary Metrics Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
                   <StatContainer title="Total Cases" value={metrics.total} description="Total active filtered logs" icon={<FileText className="h-4 w-4" />} />
-                  <StatContainer title="June Growth" value={`${metrics.growth > 0 ? "+" : ""}${metrics.growth}%`} description="Growth rate compared to May" icon={<TrendingUp className="h-4 w-4" />} />
+                  <StatContainer title={`${metrics.latestMonthName} Growth`} value={`${metrics.growth > 0 ? "+" : ""}${metrics.growth}%`} description={`Growth rate vs ${metrics.prevMonthName}`} icon={<TrendingUp className="h-4 w-4" />} />
                   <StatContainer title="Avg Resolution Time" value={`${metrics.avgDuration} Days`} description="Average days taken to close case" icon={<Clock className="h-4 w-4" />} />
                   <StatContainer title="Resolution Rate" value={`${metrics.resolutionRate}%`} description="Closed vs Active caseload" icon={<Shield className="h-4 w-4" />} />
                   <StatContainer title="Active Investigations" value={metrics.active} description="Total pending court / search" icon={<Layers className="h-4 w-4" />} />
@@ -630,21 +901,57 @@ export default function AnalyticsPage() {
                 {/* Trend Visualizations */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <Card>
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <CardTitle>Case File Trend Analysis (June vs May)</CardTitle>
-                      <Button variant="ghost" size="sm" onClick={() => openDrillDown("Trend Case Records", filteredCases)} className="text-[10px] h-7 px-2">Drill Down</Button>
+                    <CardHeader className="pb-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
+                        <div>
+                          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                            <TrendingUp className="h-4 w-4 text-cyan-400" />
+                            Case File Trend Analysis ({metrics.latestMonthName} vs {metrics.prevMonthName})
+                          </CardTitle>
+                          <p className="text-[11px] text-text-secondary mt-1">
+                            Daily FIR trajectory: <span className="text-cyan-400 font-medium">{metrics.latestMonthName}</span> (solid) vs <span className="text-purple-400 font-medium">{metrics.prevMonthName}</span> (dashed)
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openDrillDown("Trend Case Records", filteredCases)}
+                          className="text-[11px] h-7 px-2.5 bg-background-elevated/50 hover:bg-background-hover border-border-subtle shrink-0 self-start sm:self-center"
+                          leftIcon={<FileText className="h-3 w-3 text-cyan-400" />}
+                        >
+                          Drill Down
+                        </Button>
+                      </div>
                     </CardHeader>
-                    <CardContent className="h-72">
+                    <CardContent className="h-80">
                       <Chart option={trendOption} className="h-full" />
                     </CardContent>
                   </Card>
 
                   <Card>
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <CardTitle>Crime Category Breakdown</CardTitle>
-                      <Button variant="ghost" size="sm" onClick={() => openDrillDown("Crime Categories Details", filteredCases)} className="text-[10px] h-7 px-2">Drill Down</Button>
+                    <CardHeader className="pb-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
+                        <div>
+                          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                            <PieChart className="h-4 w-4 text-cyan-400" />
+                            Crime Category Breakdown
+                          </CardTitle>
+                          <p className="text-[11px] text-text-secondary mt-1">
+                            Proportional distribution across all active intelligence records
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openDrillDown("Crime Categories Details", filteredCases)}
+                          className="text-[11px] h-7 px-2.5 bg-background-elevated/50 hover:bg-background-hover border-border-subtle shrink-0 self-start sm:self-center"
+                          leftIcon={<FileText className="h-3 w-3 text-cyan-400" />}
+                        >
+                          Drill Down
+                        </Button>
+                      </div>
                     </CardHeader>
-                    <CardContent className="h-72">
+                    <CardContent className="h-80">
                       <Chart option={categoryOption} className="h-full" />
                     </CardContent>
                   </Card>
@@ -666,8 +973,8 @@ export default function AnalyticsPage() {
                     <div className="space-y-2 border-r border-border-subtle pr-4">
                       <span className="font-semibold text-text-primary text-[11px] block">Regional Comparison</span>
                       <div className="grid grid-cols-2 gap-2">
-                        <Select options={districts.map((d) => ({ value: d, label: d }))} value={compDistrict1} onChange={(val) => setCompDistrict1(val)} />
-                        <Select options={districts.map((d) => ({ value: d, label: d }))} value={compDistrict2} onChange={(val) => setCompDistrict2(val)} />
+                        <Select options={dbDistricts.map((d) => ({ value: d, label: d }))} value={compDistrict1} onChange={(val) => setCompDistrict1(val)} />
+                        <Select options={dbDistricts.map((d) => ({ value: d, label: d }))} value={compDistrict2} onChange={(val) => setCompDistrict2(val)} />
                       </div>
                     </div>
 
@@ -676,12 +983,12 @@ export default function AnalyticsPage() {
                       <span className="font-semibold text-text-primary text-[11px] block">Police Station Comparison</span>
                       <div className="grid grid-cols-2 gap-2">
                         <Select
-                          options={Object.values(policeStationsMap).flat().map((s) => ({ value: s, label: s }))}
+                          options={Object.values(dbPoliceStationsMap).flat().map((s) => ({ value: s, label: s }))}
                           value={compStation1}
                           onChange={(val) => setCompStation1(val)}
                         />
                         <Select
-                          options={Object.values(policeStationsMap).flat().map((s) => ({ value: s, label: s }))}
+                          options={Object.values(dbPoliceStationsMap).flat().map((s) => ({ value: s, label: s }))}
                           value={compStation2}
                           onChange={(val) => setCompStation2(val)}
                         />
@@ -692,8 +999,8 @@ export default function AnalyticsPage() {
                     <div className="space-y-2">
                       <span className="font-semibold text-text-primary text-[11px] block">Crime Category Comparison</span>
                       <div className="grid grid-cols-2 gap-2">
-                        <Select options={crimeCategories.map((c) => ({ value: c, label: c }))} value={compCategory1} onChange={(val) => setCompCategory1(val)} />
-                        <Select options={crimeCategories.map((c) => ({ value: c, label: c }))} value={compCategory2} onChange={(val) => setCompCategory2(val)} />
+                        <Select options={dbCategories.map((c) => ({ value: c, label: c }))} value={compCategory1} onChange={(val) => setCompCategory1(val)} />
+                        <Select options={dbCategories.map((c) => ({ value: c, label: c }))} value={compCategory2} onChange={(val) => setCompCategory2(val)} />
                       </div>
                     </div>
                   </CardContent>
@@ -717,11 +1024,11 @@ export default function AnalyticsPage() {
                     </CardHeader>
                     <CardContent className="space-y-6">
                       {[
-                        { name: compStation1, cases: mockAnalyticsCases.filter((c) => c.policeStation === compStation1) },
-                        { name: compStation2, cases: mockAnalyticsCases.filter((c) => c.policeStation === compStation2) },
+                        { name: compStation1, cases: filteredCases.filter((c) => c.policeStation === compStation1) },
+                        { name: compStation2, cases: filteredCases.filter((c) => c.policeStation === compStation2) },
                       ].map((station) => {
                         const total = station.cases.length;
-                        const pending = station.cases.filter((c) => c.status === "Under Investigation").length;
+                        const pending = station.cases.filter((c) => !c.status.toLowerCase().includes("closed") && !c.status.toLowerCase().includes("compounded")).length;
                         const severityHigh = station.cases.filter((c) => c.severity === "High").length;
                         const completion = total > 0 ? Math.round(((total - pending) / total) * 100) : 100;
 
@@ -846,7 +1153,7 @@ export default function AnalyticsPage() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border-subtle">
-                            {districts.map((d) => {
+                            {dbDistricts.map((d) => {
                               const cases = filteredCases.filter((c) => c.district === d);
                               const total = cases.length;
                               const pending = cases.filter((c) => c.status === "Under Investigation").length;
@@ -882,10 +1189,11 @@ export default function AnalyticsPage() {
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
-                        {mockOfficers.map((name) => {
-                          const cases = mockAnalyticsCases.filter((c) => c.officerName === name);
-                          const active = cases.filter((c) => c.status === "Under Investigation").length;
+                        {dbOfficers.map((name) => {
+                          const cases = filteredCases.filter((c) => c.officerName === name);
                           const total = cases.length;
+                          if (total === 0) return null;
+                          const active = cases.filter((c) => !c.status.toLowerCase().includes("closed") && !c.status.toLowerCase().includes("compounded")).length;
                           const loadPct = Math.min(Math.round((active / 10) * 100), 100);
 
                           return (

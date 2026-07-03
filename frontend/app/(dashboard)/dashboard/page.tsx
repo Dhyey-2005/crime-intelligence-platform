@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useAuthStore } from "@/store/authStore";
 import {
   mockFIRs,
   mockAIAlerts,
@@ -45,8 +44,6 @@ import {
 } from "lucide-react";
 
 export default function DashboardPage() {
-  const { user } = useAuthStore();
-
   // 1. Filter States
   const [selectedDistrict, setSelectedDistrict] = React.useState("");
   const [selectedStation, setSelectedStation] = React.useState("");
@@ -409,7 +406,7 @@ export default function DashboardPage() {
         <div>
           <h2 className="text-page-title">Operational HQ Dashboard</h2>
           <Paragraph className="text-text-secondary">
-            Welcome back, <span className="text-text-primary font-semibold">{user?.name || "Inspector Desai"}</span>. Tactical status screen is active.
+            Tactical intelligence command center active. Live geospatial &amp; analytical feeds operational.
           </Paragraph>
         </div>
         <div className="flex items-center space-x-2 bg-background-card border border-border-subtle rounded-md px-3 py-1.5 self-start md:self-auto select-none">

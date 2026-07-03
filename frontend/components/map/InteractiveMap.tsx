@@ -11,6 +11,7 @@ import { tokens } from "@/styles/tokens";
 interface InteractiveMapProps {
   districtRisks: Record<string, "High" | "Elevated" | "Moderate" | "Low">;
   hotspots: HotspotPoint[];
+  stations?: StationMarker[];
   layerControls: {
     districts: boolean;
     stations: boolean;
@@ -37,21 +38,49 @@ const getRiskColor = (risk: "High" | "Elevated" | "Moderate" | "Low") => {
   }
 };
 
+// Outer geographical boundary contour of Karnataka State
+const karnatakaStateOutline: [number, number][] = [
+  [18.06, 77.4],
+  [17.65, 77.35],
+  [17.3, 76.8],
+  [16.8, 75.8],
+  [15.8, 74.3],
+  [14.9, 74.05],
+  [14.0, 74.5],
+  [12.8, 74.8],
+  [12.1, 75.4],
+  [11.75, 76.1],
+  [11.9, 76.9],
+  [12.5, 77.8],
+  [13.1, 78.5],
+  [13.8, 78.4],
+  [14.3, 78.0],
+  [15.1, 77.8],
+  [16.2, 77.4],
+  [17.2, 77.5],
+];
+
 export default function InteractiveMap({
   districtRisks,
   hotspots,
+  stations,
   layerControls,
   onSelectDistrict,
   onSelectStation,
 }: InteractiveMapProps) {
   // Center of Karnataka
   const centerPosition: [number, number] = [14.8, 75.8];
+  const stationList = stations || mockStations;
 
   return (
     <div className="h-full w-full rounded-lg overflow-hidden border border-border-subtle bg-[#0B0F19]">
       <MapContainer
         center={centerPosition}
         zoom={7}
+        minZoom={7}
+        maxZoom={15}
+        maxBounds={[[11.0, 73.5], [19.0, 79.0]]}
+        maxBoundsViscosity={1.0}
         className="h-full w-full"
         zoomControl={true}
         style={{ height: "100%", width: "100%" }}
@@ -60,6 +89,19 @@ export default function InteractiveMap({
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+        />
+
+        {/* State Boundary Outline Layer (Karnataka Only Highlight) */}
+        <Polygon
+          positions={karnatakaStateOutline}
+          pathOptions={{
+            fillColor: "#3b82f6",
+            fillOpacity: 0.04,
+            color: "#3b82f6",
+            weight: 2,
+            dashArray: "6, 6",
+          }}
+          interactive={false}
         />
 
         {/* 1. Districts Boundaries Layer */}
@@ -109,7 +151,7 @@ export default function InteractiveMap({
 
         {/* 3. Police Stations Marker Layer */}
         {layerControls.stations &&
-          mockStations.map((station) => {
+          stationList.map((station) => {
             const isHighRisk = station.riskScore > 70;
             const markerColor = isHighRisk ? tokens.colors.danger : station.riskScore > 50 ? tokens.colors.warning : tokens.colors.success;
 

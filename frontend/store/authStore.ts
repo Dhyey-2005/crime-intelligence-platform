@@ -15,9 +15,9 @@ interface AuthState {
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
-  // Default to false for security, but allow mock session toggle
-  isAuthenticated: false,
-  user: null,
+  // Default to true since signing system is removed
+  isAuthenticated: true,
+  user: { name: "Inspector Desai", email: "desai@karnataka.gov.in", role: "Command Group" },
   login: (email, name = "Inspector Desai", role = "Command Group") => {
     set({
       isAuthenticated: true,
@@ -25,10 +25,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     });
   },
   logout: () => {
-    set({
-      isAuthenticated: false,
-      user: null,
-    });
+    // No-op since authentication system is removed
   },
   register: (name, email, role) => {
     set({

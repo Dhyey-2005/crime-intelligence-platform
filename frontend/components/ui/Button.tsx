@@ -31,14 +31,14 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         type={type}
         disabled={disabled || isLoading}
         className={clsx(
-          "inline-flex items-center justify-center font-medium rounded-md transition-all duration-default timing-default focus:outline-none focus:ring-1 focus:ring-accent-primary select-none active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none disabled:active:scale-100",
+          "inline-flex items-center justify-center font-medium rounded-md transition-[transform,background-color,border-color,box-shadow,opacity] duration-150 ease-out focus:outline-none focus:ring-1 focus:ring-accent-primary select-none active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none disabled:active:scale-100",
           {
             // Variant classes
-            "bg-accent-primary text-text-primary hover:bg-blue-700 shadow-sm": variant === "primary",
-            "bg-background-card text-text-primary border border-border-default hover:bg-background-secondary": variant === "secondary",
+            "bg-gradient-to-r from-blue-600 to-indigo-600 text-text-primary hover:from-blue-500 hover:to-indigo-500 shadow-[0_0_15px_rgba(59,130,246,0.25)] hover:shadow-[0_0_20px_rgba(59,130,246,0.4)]": variant === "primary",
+            "bg-background-card text-text-primary border border-border-default/80 hover:bg-background-secondary hover:border-text-secondary/40": variant === "secondary",
             "bg-transparent text-text-primary border border-border-default hover:bg-background-card": variant === "outline",
             "bg-transparent text-text-secondary hover:text-text-primary hover:bg-background-card": variant === "ghost",
-            "bg-danger text-text-primary hover:bg-red-700 shadow-sm": variant === "destructive",
+            "bg-gradient-to-r from-red-600 to-rose-600 text-text-primary hover:from-red-500 hover:to-rose-500 shadow-sm": variant === "destructive",
             
             // Size classes
             "px-3 py-1.5 text-xs": size === "sm",

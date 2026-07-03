@@ -279,9 +279,9 @@ INSERT INTO CaseMaster (CaseMasterID, CrimeNo, CaseNo, CrimeRegisteredDate, Poli
 SELECT
     i AS CaseMasterID,
     -- Structured CrimeNo: 1-digit Category + 4-digit District + 4-digit PS + 4-digit Year + 5-digit Serial
-    ((i % 9) + 1)::text || lpad((((i - 1) % 25) + 1)::text, 4, '0') || lpad((((i - 1) % 100) + 1)::text, 4, '0') || (2020 + (i % 6))::text || lpad(i::text, 5, '0') AS CrimeNo,
-    (2020 + (i % 6))::text || lpad(i::text, 5, '0') AS CaseNo,
-    TIMESTAMP '2020-01-01 08:30:00' + ((i * 11)::text || ' hours')::interval AS CrimeRegisteredDate,
+    ((i % 9) + 1)::text || lpad((((i - 1) % 25) + 1)::text, 4, '0') || lpad((((i - 1) % 100) + 1)::text, 4, '0') || (2025 + (i % 2))::text || lpad(i::text, 5, '0') AS CrimeNo,
+    (2025 + (i % 2))::text || lpad(i::text, 5, '0') AS CaseNo,
+    TIMESTAMP '2025-01-01 08:30:00' + ((i * 2.5)::text || ' hours')::interval AS CrimeRegisteredDate,
     ((i - 1) % 300) + 1 AS PolicePersonID,
     ((i - 1) % 100) + 1 AS PoliceStationID,
     ((i - 1) % 10) + 1 AS CaseCategoryID,
@@ -297,12 +297,24 @@ INSERT INTO Inv_OccuranceTime (InvOccuranceTimeID, CaseMasterID, IncidentFromDat
 SELECT
     i AS InvOccuranceTimeID,
     i AS CaseMasterID,
-    TIMESTAMP '2020-01-01 06:00:00' + ((i * 11)::text || ' hours')::interval AS IncidentFromDate,
-    TIMESTAMP '2020-01-01 07:30:00' + ((i * 11)::text || ' hours')::interval AS IncidentToDate,
-    TIMESTAMP '2020-01-01 08:15:00' + ((i * 11)::text || ' hours')::interval AS InfoReceivedPSDate,
-    12.9716 + ((i % 1000) * 0.001) AS latitude,
-    77.5946 + ((i % 1000) * 0.001) AS longitude,
-    'Detailed preliminary brief facts for Case No ' || i::text || '. Incident occurred near location landmark under jurisdiction of reporting police station.' AS BriefFacts
+    TIMESTAMP '2025-01-01 06:00:00' + ((i * 2.5)::text || ' hours')::interval AS IncidentFromDate,
+    TIMESTAMP '2025-01-01 07:30:00' + ((i * 2.5)::text || ' hours')::interval AS IncidentToDate,
+    TIMESTAMP '2025-01-01 08:15:00' + ((i * 2.5)::text || ' hours')::interval AS InfoReceivedPSDate,
+    CASE (((i - 1) % 25) + 1)
+        WHEN 1 THEN 12.9716 WHEN 2 THEN 12.2958 WHEN 3 THEN 15.8497 WHEN 4 THEN 12.8700 WHEN 5 THEN 15.3647
+        WHEN 6 THEN 13.9299 WHEN 7 THEN 15.1394 WHEN 8 THEN 17.3297 WHEN 9 THEN 14.4644 WHEN 10 THEN 16.8302
+        WHEN 11 THEN 13.3392 WHEN 12 THEN 13.3409 WHEN 13 THEN 13.1367 WHEN 14 THEN 12.5223 WHEN 15 THEN 13.0072
+        WHEN 16 THEN 13.3161 WHEN 17 THEN 16.1817 WHEN 18 THEN 17.9104 WHEN 19 THEN 14.2251 WHEN 20 THEN 15.4321
+        WHEN 21 THEN 14.7937 WHEN 22 THEN 12.4244 WHEN 23 THEN 15.3524 WHEN 24 THEN 16.2008 ELSE 12.7209
+    END + (((i % 41) - 20) * 0.006) AS latitude,
+    CASE (((i - 1) % 25) + 1)
+        WHEN 1 THEN 77.5946 WHEN 2 THEN 76.6394 WHEN 3 THEN 74.4977 WHEN 4 THEN 74.8430 WHEN 5 THEN 75.1240
+        WHEN 6 THEN 75.5681 WHEN 7 THEN 76.9214 WHEN 8 THEN 76.8343 WHEN 9 THEN 75.9218 WHEN 10 THEN 75.7100
+        WHEN 11 THEN 77.1011 WHEN 12 THEN 74.7421 WHEN 13 THEN 78.1336 WHEN 14 THEN 76.8958 WHEN 15 THEN 76.1004
+        WHEN 16 THEN 75.7720 WHEN 17 THEN 75.6958 WHEN 18 THEN 77.5199 WHEN 19 THEN 76.3980 WHEN 20 THEN 75.6318
+        WHEN 21 THEN 75.3992 WHEN 22 THEN 75.7382 WHEN 23 THEN 76.1548 WHEN 24 THEN 77.3621 ELSE 77.2810
+    END + (((i % 37) - 18) * 0.006) AS longitude,
+    'Detailed preliminary brief facts for Case No ' || (2025 + (i % 2))::text || lpad(i::text, 5, '0') || '. Incident reported under jurisdiction of reporting Karnataka police sector.' AS BriefFacts
 FROM generate_series(1, 5000) AS i;
 
 -- 5,000 Complainants
@@ -349,7 +361,7 @@ SELECT
     i AS ArrestSurrenderID,
     i AS CaseMasterID,
     CASE WHEN (i % 10) = 0 THEN 2 ELSE 1 END AS ArrestSurrenderTypeID,
-    TIMESTAMP '2020-01-02 10:00:00' + ((i * 11)::text || ' hours')::interval AS ArrestSurrenderDate,
+    TIMESTAMP '2025-01-02 10:00:00' + ((i * 2.5)::text || ' hours')::interval AS ArrestSurrenderDate,
     1 AS ArrestSurrenderStateId,
     ((i - 1) % 25) + 1 AS ArrestSurrenderDistrictId,
     ((i - 1) % 100) + 1 AS PoliceStationID,
@@ -384,7 +396,7 @@ INSERT INTO ChargesheetDetails (CSID, CaseMasterID, csdate, cstype, PolicePerson
 SELECT
     i AS CSID,
     i AS CaseMasterID,
-    TIMESTAMP '2020-02-01 11:00:00' + ((i * 11)::text || ' hours')::interval AS csdate,
+    TIMESTAMP '2025-01-05 11:00:00' + ((i * 2.5)::text || ' hours')::interval AS csdate,
     CASE (i % 10) WHEN 0 THEN 'B' WHEN 1 THEN 'C' ELSE 'A' END AS cstype,
     ((i - 1) % 300) + 1 AS PolicePersonID
 FROM generate_series(1, 3000) AS i;

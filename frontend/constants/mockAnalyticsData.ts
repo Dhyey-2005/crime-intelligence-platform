@@ -39,23 +39,59 @@ export const mockOfficers = [
 ];
 
 export const districts = [
-  "Bengaluru City",
-  "Mysuru City",
+  "Bengaluru Urban",
+  "Mysuru",
+  "Belagavi",
+  "Mangaluru (Dakshina Kannada)",
   "Hubballi-Dharwad",
-  "Belagavi City",
-  "Mangaluru City",
-  "Kalaburagi",
   "Shivamogga",
+  "Ballari",
+  "Kalaburagi",
+  "Davanagere",
+  "Vijayapura",
+  "Tumakuru",
+  "Udupi",
+  "Kolar",
+  "Mandya",
+  "Hassan",
+  "Chikkamagaluru",
+  "Bagalkote",
+  "Bidar",
+  "Chitradurga",
+  "Gadag",
+  "Haveri",
+  "Kodagu",
+  "Koppal",
+  "Raichur",
+  "Ramanagara",
 ];
 
 export const policeStationsMap: Record<string, string[]> = {
-  "Bengaluru City": ["Koramangala PS", "Indiranagar PS", "Whitefield PS", "Jayanagar PS"],
-  "Mysuru City": ["Devaraja PS", "Lashkar PS", "Vidyaranyapuram PS"],
-  "Hubballi-Dharwad": ["Hubballi Town PS", "Dharwad Suburban PS"],
-  "Belagavi City": ["Belagavi Town PS", "Khade Bazar PS"],
-  "Mangaluru City": ["Kadri PS", "Pandeshwar PS"],
-  Kalaburagi: ["Kalaburagi Town PS", "Chowk PS"],
-  Shivamogga: ["Shivamogga Town PS", "Doddapete PS"],
+  "Bengaluru Urban": ["Koramangala PS", "Indiranagar PS", "Whitefield PS", "Jayanagar PS", "Ashok Nagar PS"],
+  "Mysuru": ["Devaraja PS", "Lashkar PS", "Vidyaranyapuram PS", "Saraswathipuram PS"],
+  "Belagavi": ["Belagavi Town PS", "Khade Bazar PS", "Camp PS"],
+  "Mangaluru (Dakshina Kannada)": ["Kadri PS", "Pandeshwar PS", "Barkur PS", "Ullal PS"],
+  "Hubballi-Dharwad": ["Hubballi Town PS", "Dharwad Suburban PS", "Vidyanagar PS"],
+  "Shivamogga": ["Shivamogga Town PS", "Doddapete PS", "Kote PS"],
+  "Ballari": ["Ballari Town PS", "Cowl Bazaar PS", "Gandhinagar PS"],
+  "Kalaburagi": ["Kalaburagi Town PS", "Chowk PS", "Station Bazar PS"],
+  "Davanagere": ["Davanagere Extension PS", "KTJ Nagar PS", "RMC PS"],
+  "Vijayapura": ["Gandhi Chowk PS", "Golumbaz PS", "Jalal Nagar PS"],
+  "Tumakuru": ["Tumakuru Town PS", "NEPS Tumakuru", "Kyathsandra PS"],
+  "Udupi": ["Udupi Town PS", "Manipal PS", "Malpe PS"],
+  "Kolar": ["Kolar Town PS", "Galpet PS", "Kolar Gold Fields PS"],
+  "Mandya": ["Mandya Town PS", "East PS Mandya", "Srirangapatna PS"],
+  "Hassan": ["Hassan Town PS", "Pension Mohalla PS", "Extension PS"],
+  "Chikkamagaluru": ["Chikkamagaluru Town PS", "Basavanahalli PS"],
+  "Bagalkote": ["Bagalkote Town PS", "Navanagar PS"],
+  "Bidar": ["Bidar Town PS", "Market PS Bidar", "New Town PS"],
+  "Chitradurga": ["Chitradurga Town PS", "Kote PS Chitradurga"],
+  "Gadag": ["Gadag Town PS", "Betgeri PS"],
+  "Haveri": ["Haveri Town PS", "Vidyanagar PS Haveri"],
+  "Kodagu": ["Madikeri Town PS", "Virajpet PS", "Somwarpet PS"],
+  "Koppal": ["Koppal Town PS", "Gangavathi PS"],
+  "Raichur": ["Raichur Town PS", "Sadar Bazar PS"],
+  "Ramanagara": ["Ramanagara Town PS", "Ijoor PS", "Channapatna PS"],
 };
 
 export const crimeCategories = [
@@ -70,7 +106,7 @@ export const crimeCategories = [
 const generateAnalyticsCases = (): AnalyticsCase[] => {
   const cases: AnalyticsCase[] = [];
   
-  for (let i = 0; i < 200; i++) {
+  for (let i = 0; i < 5000; i++) {
     const distIndex = i % districts.length;
     const district = districts[distIndex];
     const stations = policeStationsMap[district];
@@ -110,15 +146,16 @@ const generateAnalyticsCases = (): AnalyticsCase[] => {
     const arrestCompleted = status === "Closed" || status === "Charge Sheet Filed" || i % 3 === 0;
     const hourOfDay = (i * 7) % 24;
 
-    // Date spreading over May & June 2026 (for YoY / Trend comparisons)
-    const month = i % 2 === 0 ? "05" : "06";
+    // Date spreading over Jan through June 2026
+    const monthNum = 1 + (i % 6);
+    const month = monthNum < 10 ? `0${monthNum}` : `${monthNum}`;
     const day = 1 + (i % 28);
     const dayString = day < 10 ? `0${day}` : `${day}`;
     const date = `2026-${month}-${dayString}`;
 
     cases.push({
-      id: `FIR-2026-${1000 + i}`,
-      firNumber: `KA-2026-${3500 + i}`,
+      id: `FIR-2026-${10000 + i}`,
+      firNumber: `KA-2026-${35000 + i}`,
       date,
       district,
       policeStation: station,

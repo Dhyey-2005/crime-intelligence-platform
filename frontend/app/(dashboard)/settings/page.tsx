@@ -1,16 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { useAuthStore } from "@/store/authStore";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { Select, Switch } from "@/components/ui/Form";
 import { Badge } from "@/components/ui/Feedback";
 import { PageHeading, SectionHeading, CardTitle as TypoCardTitle, Paragraph, Caption, FormLabel } from "@/components/ui/Typography";
 import { Tabs } from "@/components/ui/Navigation";
 import Button from "@/components/ui/Button";
-import { Avatar } from "@/components/ui/Utility";
 import {
-  User,
   Settings,
   Bell,
   Eye,
@@ -23,8 +20,6 @@ import {
 import { toast, Toaster } from "sonner";
 
 export default function SettingsPage() {
-  const { user } = useAuthStore();
-
   // 1. Settings states
   const [language, setLanguage] = React.useState("en");
   const [dashboardPref, setDashboardPref] = React.useState("executive");
@@ -53,79 +48,16 @@ export default function SettingsPage() {
 
       {/* Header */}
       <div>
-        <h2 className="text-page-title">Settings & User Profile</h2>
+        <h2 className="text-page-title">System Configuration & Settings</h2>
         <Paragraph className="text-text-secondary">
-          Manage your operational credentials, notification preferences, dashboard themes, and local command settings.
+          Manage terminal preferences, notification thresholds, dashboard themes, and local command settings.
         </Paragraph>
       </div>
 
       {/* Tabs Layout */}
       <Tabs
         items={[
-          // Tab 1: User Profile
-          {
-            id: "profile",
-            label: "User Profile",
-            icon: <User className="h-4 w-4" />,
-            content: (
-              <div className="space-y-6 mt-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Operational Terminal Credentials</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    {/* Avatar & Basic details row */}
-                    <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-6 pb-6 border-b border-border-subtle">
-                      <Avatar
-                        name={user?.name || "Inspector Desai"}
-                        size="lg"
-                        src={user?.email === "admin@agency.gov" ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=256" : undefined}
-                      />
-                      <div className="text-center sm:text-left space-y-1">
-                        <h3 className="text-base font-bold text-text-primary">{user?.name || "Inspector Desai"}</h3>
-                        <Caption className="text-text-secondary uppercase tracking-wider block">Designation: {user?.role || "Command Analyst"}</Caption>
-                        <Badge variant="primary" className="mt-1">Operational Role: {user?.role || "Inspector"}</Badge>
-                      </div>
-                    </div>
-
-                    {/* Metadata fields */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs text-text-secondary leading-relaxed">
-                      <div className="space-y-3">
-                        <div>
-                          <span className="text-[10px] text-text-secondary uppercase font-bold block">Agency Email</span>
-                          <span className="text-text-primary font-medium">{user?.email || "desai@karnataka.gov.in"}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-text-secondary uppercase font-bold block">Department / Branch</span>
-                          <span className="text-text-primary font-medium">State Crime Records Bureau (SCRB)</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-text-secondary uppercase font-bold block">Assigned Precinct Command</span>
-                          <span className="text-text-primary font-medium">Karnataka Police HQ, Bengaluru</span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-3">
-                        <div>
-                          <span className="text-[10px] text-text-secondary uppercase font-bold block">Security Clearance</span>
-                          <span className="text-text-primary font-bold text-danger">Level-3 (Restricted Personnel)</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-text-secondary uppercase font-bold block">Last Terminal Login</span>
-                          <span className="text-text-primary font-medium">{new Date().toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-text-secondary uppercase font-bold block">Contact Information</span>
-                          <span className="text-text-primary font-medium">+91 94480 22334 (HQ Desk)</span>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            ),
-          },
-          // Tab 2: Application Preferences
+          // Tab 1: Application Preferences
           {
             id: "preferences",
             label: "Terminal Preferences",

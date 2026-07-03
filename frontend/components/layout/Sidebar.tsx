@@ -15,7 +15,7 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  ShieldAlert,
+  ShieldCheck,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -52,10 +52,10 @@ export default function Sidebar() {
               href={item.href}
               onClick={handleLinkClick}
               className={clsx(
-                "flex items-center space-x-3 px-3 py-2.5 rounded-md text-xs font-medium transition-all duration-150 focus:outline-none focus:ring-1 focus:ring-accent-primary select-none",
+                "flex items-center space-x-3 px-3 py-2.5 rounded-md text-xs font-medium transition-[transform,background-color,color,border-color] duration-150 ease-out focus:outline-none focus:ring-1 focus:ring-accent-primary select-none",
                 isActive
-                  ? "bg-accent-primary/10 text-accent-primary border-l-2 border-accent-primary"
-                  : "text-text-secondary hover:text-text-primary hover:bg-background-card"
+                  ? "bg-gradient-to-r from-blue-600/20 via-blue-600/10 to-transparent text-accent-primary font-semibold border-l-2 border-accent-primary shadow-[inset_4px_0_0_0_#3b82f6]"
+                  : "text-text-secondary hover:text-text-primary hover:bg-background-card/80 hover:translate-x-1"
               )}
             >
               <Icon className="h-4 w-4 flex-shrink-0" />
@@ -84,16 +84,24 @@ export default function Sidebar() {
         )}
       >
         {/* Brand / Logo */}
-        <div className={clsx("h-16 flex items-center px-4 border-b border-border-subtle", isCollapsed ? "justify-center" : "space-x-3")}>
-          <div className="h-8 w-8 rounded bg-accent-primary flex items-center justify-center flex-shrink-0">
-            <ShieldAlert className="h-5 w-5 text-text-primary" />
+        <Link href="/" className={clsx("h-16 flex items-center px-4 border-b border-border-subtle hover:bg-background-card/50 transition-colors", isCollapsed ? "justify-center" : "space-x-3")}>
+          <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-400 p-[1.5px] shadow-[0_0_15px_rgba(59,130,246,0.5)] flex items-center justify-center flex-shrink-0 transition-transform duration-300 hover:scale-105">
+            <div className="h-full w-full bg-[#0a0f1d] rounded-[10.5px] flex items-center justify-center relative overflow-hidden">
+              <div className="absolute inset-0 bg-radial-gradient opacity-60" />
+              <ShieldCheck className="h-5 w-5 text-cyan-400 stroke-[2.2]" />
+            </div>
           </div>
           {!isCollapsed && (
-            <span className="text-sm font-bold text-text-primary tracking-wider uppercase truncate">
-              CrimeShield
-            </span>
+            <div className="flex flex-col truncate">
+              <span className="text-xs font-black text-text-primary tracking-widest uppercase truncate bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+                CrimeShield
+              </span>
+              <span className="text-[9px] font-bold text-accent-primary tracking-widest uppercase truncate">
+                Intelligence
+              </span>
+            </div>
           )}
-        </div>
+        </Link>
 
         {/* Navigation Items */}
         <nav className="flex-grow flex flex-col justify-between overflow-y-auto">
@@ -129,14 +137,22 @@ export default function Sidebar() {
         )}
       >
         {/* Brand / Logo */}
-        <div className="h-16 flex items-center px-6 border-b border-border-subtle space-x-3 flex-shrink-0">
-          <div className="h-8 w-8 rounded bg-accent-primary flex items-center justify-center">
-            <ShieldAlert className="h-5 w-5 text-text-primary" />
+        <Link href="/" className="h-16 flex items-center px-6 border-b border-border-subtle space-x-3 flex-shrink-0 hover:bg-background-card/50 transition-colors">
+          <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-400 p-[1.5px] shadow-[0_0_15px_rgba(59,130,246,0.5)] flex items-center justify-center flex-shrink-0">
+            <div className="h-full w-full bg-[#0a0f1d] rounded-[10.5px] flex items-center justify-center relative overflow-hidden">
+              <div className="absolute inset-0 bg-radial-gradient opacity-60" />
+              <ShieldCheck className="h-5 w-5 text-cyan-400 stroke-[2.2]" />
+            </div>
           </div>
-          <span className="text-sm font-bold text-text-primary tracking-wider uppercase">
-            CrimeShield
-          </span>
-        </div>
+          <div className="flex flex-col truncate">
+            <span className="text-xs font-black text-text-primary tracking-widest uppercase truncate bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+              CrimeShield
+            </span>
+            <span className="text-[9px] font-bold text-accent-primary tracking-widest uppercase truncate">
+              Intelligence
+            </span>
+          </div>
+        </Link>
 
         {/* Mobile Navigation */}
         <nav className="flex-grow overflow-y-auto">{renderNavList()}</nav>

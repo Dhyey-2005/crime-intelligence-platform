@@ -4,24 +4,24 @@
 
 @layer base {
   :root {
-    --bg-primary: #07090e;      /* Premium deep obsidian black-blue */
-    --bg-secondary: #0d111a;    /* Matte dark navy-slate */
-    --bg-card: #121824;         /* Rich dark navy card color */
+    --bg-primary: #06080F;      /* Premium deep obsidian black-blue */
+    --bg-secondary: #0B101D;    /* Sleek matte dark navy-slate */
+    --bg-card: #101726;         /* Elevated rich dark card navy */
     
-    --text-primary: #f8fafc;    /* Crisp, bright white-slate */
-    --text-secondary: #94a3b8;  /* Clean, highly-readable slate text */
+    --text-primary: #F8FAFC;    /* Crisp, bright white-slate */
+    --text-secondary: #94A3B8;  /* Clean, highly-readable slate text */
     
-    --accent-primary: #3b82f6;  /* High-contrast vibrant blue */
+    --accent-primary: #3B82F6;  /* High-contrast vibrant blue */
     
-    --success: #10b981;
-    --warning: #f59e0b;
-    --danger: #ef4444;
+    --success: #10B981;
+    --warning: #F59E0B;
+    --danger: #EF4444;
     
-    --ai-intelligence: #a855f7; /* Vibrant cognitive violet */
-    --analytics: #06b6d4;       /* Tactical cyan */
+    --ai-intelligence: #A855F7; /* Vibrant cognitive violet */
+    --analytics: #06B6D4;       /* Tactical cyan */
     
-    --border-subtle: #1a2333;   /* Very subtle slate line */
-    --border-default: #2d3b50;  /* Standard border line */
+    --border-subtle: #182234;   /* Crisp subtle slate line */
+    --border-default: #2A384E;  /* Standard border line */
     
     --radius-sm: 0.25rem;
     --radius-md: 0.375rem;
@@ -33,14 +33,36 @@
   body {
     background-color: var(--bg-primary);
     color: var(--text-primary);
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    letter-spacing: -0.01em;
+    font-family: var(--font-jakarta), 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    letter-spacing: -0.015em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+
+  /* Global Typography Normalization & Scale Upgrade */
+  [class*="text-[9px]"], [class*="text-[10px]"], [class*="text-[11px]"] {
+    font-size: 0.75rem !important; /* 12px minimum readable threshold */
+    line-height: 1.125rem !important;
+  }
+  .text-xs {
+    font-size: 0.8125rem !important; /* 13px */
+    line-height: 1.25rem !important;
+  }
+  .text-sm {
+    font-size: 0.9375rem !important; /* 15px */
+    line-height: 1.5rem !important;
+  }
+  .text-base {
+    font-size: 1.0625rem !important; /* 17px */
+    line-height: 1.625rem !important;
   }
 
   /* Thin, professional scrollbar */
   ::-webkit-scrollbar {
-    width: 5px;
-    height: 5px;
+    width: 6px;
+    height: 6px;
   }
   ::-webkit-scrollbar-track {
     background: var(--bg-primary);
@@ -55,25 +77,45 @@
 }
 
 @layer utilities {
+  .shadow-glow-blue {
+    box-shadow: 0 0 25px rgba(59, 130, 246, 0.25);
+  }
+  .shadow-glow-cyan {
+    box-shadow: 0 0 25px rgba(6, 182, 212, 0.25);
+  }
+  .shadow-glow-purple {
+    box-shadow: 0 0 25px rgba(168, 85, 247, 0.25);
+  }
+  .bg-radial-gradient {
+    background: radial-gradient(circle at 50% 0%, rgba(59, 130, 246, 0.12) 0%, transparent 70%);
+  }
+  .glass-panel {
+    background: rgba(16, 23, 38, 0.85);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(42, 56, 78, 0.5);
+  }
+}
+
+@layer utilities {
   /* Typography Utility Classes */
   .text-page-title {
-    font-size: 1.75rem; /* 28px */
+    font-size: 2.125rem; /* 34px */
     font-weight: 800;
-    line-height: 2.25rem;
+    line-height: 2.5rem;
     letter-spacing: -0.03em;
     color: var(--text-primary);
   }
 
   .text-section-title {
-    font-size: 1.25rem; /* 20px */
+    font-size: 1.375rem; /* 22px */
     font-weight: 700;
-    line-height: 1.75rem;
+    line-height: 1.875rem;
     letter-spacing: -0.02em;
     color: var(--text-primary);
   }
 
   .text-card-title {
-    font-size: 1rem; /* 16px */
+    font-size: 1.0625rem; /* 17px */
     font-weight: 600;
     line-height: 1.5rem;
     letter-spacing: -0.01em;
@@ -81,34 +123,34 @@
   }
 
   .text-body {
-    font-size: 0.8125rem; /* 13px */
+    font-size: 0.9375rem; /* 15px */
     font-weight: 400;
-    line-height: 1.25rem;
+    line-height: 1.5rem;
     color: var(--text-secondary);
   }
 
   .text-caption {
-    font-size: 0.75rem; /* 12px */
-    font-weight: 400;
-    line-height: 1rem;
+    font-size: 0.8125rem; /* 13px */
+    font-weight: 500;
+    line-height: 1.25rem;
     color: var(--text-secondary);
   }
 
   .text-label {
-    font-size: 0.6875rem; /* 11px */
+    font-size: 0.75rem; /* 12px */
     font-weight: 600;
-    line-height: 0.875rem;
+    line-height: 1rem;
     text-transform: uppercase;
-    letter-spacing: 0.07em;
+    letter-spacing: 0.06em;
     color: var(--text-secondary);
   }
 
   .text-table-header {
-    font-size: 0.6875rem; /* 11px */
+    font-size: 0.75rem; /* 12px */
     font-weight: 600;
-    line-height: 0.875rem;
+    line-height: 1rem;
     text-transform: uppercase;
-    letter-spacing: 0.07em;
+    letter-spacing: 0.06em;
     color: var(--text-secondary);
   }
 }
