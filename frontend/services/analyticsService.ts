@@ -1,4 +1,4 @@
-import { AnalyticsCase } from "@/constants/mockAnalyticsData";
+import { AnalyticsCase, mockAnalyticsCases } from "@/constants/mockAnalyticsData";
 
 export interface DashboardSummaryResponse {
   total_cases: number;
@@ -65,17 +65,92 @@ export interface FilterOptionsResponse {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+const CASES_CACHE_KEY = "ksp_live_cases_cache_v1";
+const SUMMARY_CACHE_KEY = "ksp_live_summary_cache_v1";
+const FILTER_CACHE_KEY = "ksp_live_filter_cache_v1";
+
 export const analyticsService = {
+  // Deterministic defaults for SSR / initial hydration (prevents Next.js Hydration failed errors)
+  getInitialCases(): AnalyticsCase[] {
+    return mockAnalyticsCases;
+  },
+
+  getInitialSummary(): DashboardSummaryResponse | null {
+    return null;
+  },
+
+  getInitialFilterOptions(): FilterOptionsResponse | null {
+    return null;
+  },
+
+  // Synchronous client-side cache readers to load real metrics immediately after hydration
+  getCachedCases(): AnalyticsCase[] | null {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem(CASES_CACHE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      } catch (e) {
+        console.warn("Error reading live cases from localStorage:", e);
+      }
+    }
+    return null;
+  },
+
+  getCachedSummary(): DashboardSummaryResponse | null {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem(SUMMARY_CACHE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && typeof parsed.total_cases === "number") {
+            return parsed;
+          }
+        }
+      } catch (e) {
+        console.warn("Error reading live summary from localStorage:", e);
+      }
+    }
+    return null;
+  },
+
+  getCachedFilterOptions(): FilterOptionsResponse | null {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem(FILTER_CACHE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && Array.isArray(parsed.districts)) {
+            return parsed;
+          }
+        }
+      } catch (e) {
+        console.warn("Error reading filter options from localStorage:", e);
+      }
+    }
+    return null;
+  },
+
   async getSummary(): Promise<DashboardSummaryResponse | null> {
     try {
       const res = await fetch(`${API_BASE_URL}/api/v1/analytics/summary`, {
         cache: "no-store",
       });
       if (!res.ok) throw new Error("Failed to fetch summary");
-      return await res.json();
+      const data = await res.json();
+      if (typeof window !== "undefined" && data && typeof data.total_cases === "number") {
+        try {
+          localStorage.setItem(SUMMARY_CACHE_KEY, JSON.stringify(data));
+        } catch (e) {}
+      }
+      return data;
     } catch (error) {
       console.warn("FastAPI backend offline or error fetching summary:", error);
-      return null;
+      return analyticsService.getInitialSummary();
     }
   },
 
@@ -137,10 +212,16 @@ export const analyticsService = {
         cache: "no-store",
       });
       if (!res.ok) throw new Error("Failed to fetch cases");
-      return await res.json();
+      const data = await res.json();
+      if (typeof window !== "undefined" && Array.isArray(data) && data.length > 0) {
+        try {
+          localStorage.setItem(CASES_CACHE_KEY, JSON.stringify(data));
+        } catch (e) {}
+      }
+      return data;
     } catch (error) {
       console.warn("FastAPI backend offline or error fetching cases:", error);
-      return [];
+      return analyticsService.getInitialCases();
     }
   },
 
@@ -150,10 +231,16 @@ export const analyticsService = {
         cache: "no-store",
       });
       if (!res.ok) throw new Error("Failed to fetch filter options");
-      return await res.json();
+      const data = await res.json();
+      if (typeof window !== "undefined" && data && Array.isArray(data.districts)) {
+        try {
+          localStorage.setItem(FILTER_CACHE_KEY, JSON.stringify(data));
+        } catch (e) {}
+      }
+      return data;
     } catch (error) {
       console.warn("FastAPI backend offline or error fetching filter options:", error);
-      return null;
+      return analyticsService.getInitialFilterOptions();
     }
   },
 };

@@ -53,9 +53,9 @@ export default function AnalyticsPage() {
   const { user } = useAuthStore();
 
   // Live PostgreSQL Backend Integration
-  const [liveSummary, setLiveSummary] = React.useState<DashboardSummaryResponse | null>(null);
+  const [liveSummary, setLiveSummary] = React.useState<DashboardSummaryResponse | null>(() => analyticsService.getInitialSummary());
   const [isBackendLive, setIsBackendLive] = React.useState(false);
-  const [dbCases, setDbCases] = React.useState<AnalyticsCase[]>(mockAnalyticsCases);
+  const [dbCases, setDbCases] = React.useState<AnalyticsCase[]>(() => analyticsService.getInitialCases());
   const [dbDistricts, setDbDistricts] = React.useState<string[]>(districts);
   const [dbPoliceStationsMap, setDbPoliceStationsMap] = React.useState<Record<string, string[]>>(policeStationsMap);
   const [dbCategories, setDbCategories] = React.useState<string[]>(crimeCategories);
@@ -119,6 +119,23 @@ export default function AnalyticsPage() {
   }, []);
 
   React.useEffect(() => {
+    const cachedCases = analyticsService.getCachedCases();
+    if (cachedCases) setDbCases(cachedCases);
+    const cachedSummary = analyticsService.getCachedSummary();
+    if (cachedSummary) {
+      setLiveSummary(cachedSummary);
+      setIsBackendLive(true);
+    }
+    const cachedFilters = analyticsService.getCachedFilterOptions();
+    if (cachedFilters) {
+      if (cachedFilters.districts?.length > 0) setDbDistricts(cachedFilters.districts);
+      if (cachedFilters.police_stations && Object.keys(cachedFilters.police_stations).length > 0) setDbPoliceStationsMap(cachedFilters.police_stations);
+      if (cachedFilters.categories?.length > 0) setDbCategories(cachedFilters.categories);
+      if (cachedFilters.subcategories && Object.keys(cachedFilters.subcategories).length > 0) setDbSubcategoryMap(cachedFilters.subcategories);
+      if (cachedFilters.statuses?.length > 0) setDbStatuses(cachedFilters.statuses);
+      if (cachedFilters.officers?.length > 0) setDbOfficers(cachedFilters.officers);
+    }
+
     syncRealTimeData(false);
   }, [syncRealTimeData]);
 
@@ -251,18 +268,21 @@ export default function AnalyticsPage() {
       ? Math.round(filteredCases.reduce((sum, c) => sum + c.durationDays, 0) / total)
       : 0;
 
-    // Resolution rate (closed / charge sheeted cases in DB)
+    // Closed cases in DB
     const closed = filteredCases.filter((c) => 
-      c.status.toLowerCase().includes("closed") || 
-      c.status.toLowerCase().includes("compounded") ||
-      c.status.toLowerCase().includes("sheet")
+      (c.status as string).toLowerCase().includes("closed") || 
+      (c.status as string).toLowerCase().includes("compounded") ||
+      (c.status as string) === "Case Closed" ||
+      (c.status as string) === "Closed"
     ).length;
     const resolutionRate = total > 0 ? Math.round((closed / total) * 100) : 100;
 
-    // Active cases in DB
+    // Active cases in DB (all non-closed cases, matching Crime Map exactly)
     const active = filteredCases.filter((c) => 
-      !c.status.toLowerCase().includes("closed") && 
-      !c.status.toLowerCase().includes("compounded")
+      !(c.status as string).toLowerCase().includes("closed") && 
+      !(c.status as string).toLowerCase().includes("compounded") &&
+      (c.status as string) !== "Case Closed" &&
+      (c.status as string) !== "Closed"
     ).length;
 
     // Growth Rate (Latest Month vs Previous Month in filteredCases)
@@ -1028,9 +1048,10 @@ export default function AnalyticsPage() {
                         { name: compStation2, cases: filteredCases.filter((c) => c.policeStation === compStation2) },
                       ].map((station) => {
                         const total = station.cases.length;
-                        const pending = station.cases.filter((c) => !c.status.toLowerCase().includes("closed") && !c.status.toLowerCase().includes("compounded")).length;
+                        const active = station.cases.filter((c) => !(c.status as string).toLowerCase().includes("closed") && !(c.status as string).toLowerCase().includes("compounded") && (c.status as string) !== "Closed" && (c.status as string) !== "Case Closed").length;
+                        const pendingSearch = station.cases.filter((c) => (c.status as string) === "Under Investigation" || (c.status as string).toLowerCase().includes("investigation")).length;
                         const severityHigh = station.cases.filter((c) => c.severity === "High").length;
-                        const completion = total > 0 ? Math.round(((total - pending) / total) * 100) : 100;
+                        const completion = total > 0 ? Math.round(((total - active) / total) * 100) : 100;
 
                         return (
                           <div key={station.name} className="p-4 bg-background-secondary/20 border border-border-subtle rounded-md space-y-3">
@@ -1038,10 +1059,14 @@ export default function AnalyticsPage() {
                               <span className="font-semibold text-text-primary text-xs">{station.name}</span>
                               <Badge variant="primary">{total} Total Cases</Badge>
                             </div>
-                            <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
+                            <div className="grid grid-cols-4 gap-1.5 text-center text-[10px]">
+                              <div>
+                                <span className="block text-text-secondary uppercase">Active Cases</span>
+                                <span className="text-sm font-bold text-text-primary mt-0.5 block">{active}</span>
+                              </div>
                               <div>
                                 <span className="block text-text-secondary uppercase">Pending Search</span>
-                                <span className="text-sm font-bold text-text-primary mt-0.5 block">{pending}</span>
+                                <span className="text-sm font-bold text-warning mt-0.5 block">{pendingSearch}</span>
                               </div>
                               <div>
                                 <span className="block text-text-secondary uppercase">High Severity</span>
@@ -1146,8 +1171,9 @@ export default function AnalyticsPage() {
                           <thead>
                             <tr className="bg-background-secondary border-b border-border-subtle text-text-primary">
                               <th className="p-3 font-semibold text-left">District</th>
-                              <th className="p-3 font-semibold text-center">Load</th>
-                              <th className="p-3 font-semibold text-center">Pending</th>
+                              <th className="p-3 font-semibold text-center">Total FIRs</th>
+                              <th className="p-3 font-semibold text-center">Active Caseload</th>
+                              <th className="p-3 font-semibold text-center">Pending Search</th>
                               <th className="p-3 font-semibold text-center">Resolution Time</th>
                               <th className="p-3 font-semibold text-center">Arrest Index</th>
                             </tr>
@@ -1156,7 +1182,8 @@ export default function AnalyticsPage() {
                             {dbDistricts.map((d) => {
                               const cases = filteredCases.filter((c) => c.district === d);
                               const total = cases.length;
-                              const pending = cases.filter((c) => c.status === "Under Investigation").length;
+                              const active = cases.filter((c) => !(c.status as string).toLowerCase().includes("closed") && !(c.status as string).toLowerCase().includes("compounded") && (c.status as string) !== "Closed" && (c.status as string) !== "Case Closed").length;
+                              const pending = cases.filter((c) => (c.status as string) === "Under Investigation" || (c.status as string).toLowerCase().includes("investigation")).length;
                               const avgDuration = total > 0 ? Math.round(cases.reduce((sum, c) => sum + c.durationDays, 0) / total) : 0;
                               const arrestCount = cases.filter((c) => c.arrestCompleted).length;
                               const arrestPct = total > 0 ? Math.round((arrestCount / total) * 100) : 100;
@@ -1165,7 +1192,8 @@ export default function AnalyticsPage() {
                                 <tr key={d} className="hover:bg-background-secondary/20 transition-colors">
                                   <td className="p-3 font-semibold text-text-primary">{d}</td>
                                   <td className="p-3 text-center text-text-secondary">{total}</td>
-                                  <td className="p-3 text-center text-text-secondary">{pending}</td>
+                                  <td className="p-3 text-center font-bold text-text-primary">{active}</td>
+                                  <td className="p-3 text-center text-warning">{pending}</td>
                                   <td className="p-3 text-center text-text-secondary">{avgDuration} Days</td>
                                   <td className="p-3 text-center">
                                     <div className="flex items-center justify-center space-x-1.5">
@@ -1193,7 +1221,7 @@ export default function AnalyticsPage() {
                           const cases = filteredCases.filter((c) => c.officerName === name);
                           const total = cases.length;
                           if (total === 0) return null;
-                          const active = cases.filter((c) => !c.status.toLowerCase().includes("closed") && !c.status.toLowerCase().includes("compounded")).length;
+                          const active = cases.filter((c) => !(c.status as string).toLowerCase().includes("closed") && !(c.status as string).toLowerCase().includes("compounded") && (c.status as string) !== "Closed" && (c.status as string) !== "Case Closed").length;
                           const loadPct = Math.min(Math.round((active / 10) * 100), 100);
 
                           return (

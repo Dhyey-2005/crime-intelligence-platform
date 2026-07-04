@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { MapContainer, TileLayer, Polygon, Circle, CircleMarker, Popup, Tooltip } from "react-leaflet";
+import { MapContainer, TileLayer, Polygon, Circle, CircleMarker, Popup, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { districtsGeoJSON, mockStations, HotspotPoint, StationMarker } from "@/constants/mockGeographicData";
@@ -37,6 +37,30 @@ const getRiskColor = (risk: "High" | "Elevated" | "Moderate" | "Low") => {
       return { fill: tokens.colors.border.default, border: tokens.colors.border.subtle };
   }
 };
+
+// Automatically invalidate Leaflet size whenever parent container resizes (e.g. Fullscreen toggle or window resize)
+function MapResizeHandler() {
+  const map = useMap();
+  React.useEffect(() => {
+    map.invalidateSize();
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 250);
+
+    const container = map.getContainer();
+    const observer = new ResizeObserver(() => {
+      map.invalidateSize();
+    });
+    if (container) {
+      observer.observe(container);
+    }
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, [map]);
+  return null;
+}
 
 // Outer geographical boundary contour of Karnataka State
 const karnatakaStateOutline: [number, number][] = [
@@ -85,6 +109,8 @@ export default function InteractiveMap({
         zoomControl={true}
         style={{ height: "100%", width: "100%" }}
       >
+        <MapResizeHandler />
+
         {/* Dark theme maps tile provider */}
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
@@ -142,11 +168,20 @@ export default function InteractiveMap({
               center={[hs.lat, hs.lng]}
               radius={hs.radius}
               pathOptions={{
-                fillColor: "#EF4444",
-                fillOpacity: hs.intensity * 0.35,
-                color: "transparent",
+                fillColor: "#FF1E56",
+                fillOpacity: 0.22,
+                color: "#FF0033",
+                weight: 2,
+                dashArray: "5, 5",
+                opacity: 0.85,
               }}
-            />
+            >
+              <Tooltip sticky>
+                <span className="text-[10px] font-bold text-[#0B0F19]">
+                  High-Risk Crime Cluster (Radius: {(hs.radius / 1000).toFixed(1)} km)
+                </span>
+              </Tooltip>
+            </Circle>
           ))}
 
         {/* 3. Police Stations Marker Layer */}

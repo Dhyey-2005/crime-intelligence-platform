@@ -101,10 +101,10 @@ export default function InvestigationPage() {
 
   // Operational KPIs derived dynamically
   const kpis = React.useMemo(() => {
-    const active = filteredCases.filter((c) => c.status !== "Case Closed").length;
-    const pending = filteredCases.filter((c) => c.status === "Investigation Started" || c.status === "Evidence Collection").length;
-    const closed = filteredCases.filter((c) => c.status === "Case Closed").length;
-    const backlog = filteredCases.filter((c) => c.durationDays > 20 && c.status !== "Case Closed").length;
+    const active = filteredCases.filter((c) => (c.status as string) !== "Closed" && (c.status as string) !== "Case Closed" && !(c.status as string).toLowerCase().includes("closed") && !(c.status as string).toLowerCase().includes("compounded")).length;
+    const pending = filteredCases.filter((c) => (c.status as string) === "Investigation Started" || (c.status as string) === "Evidence Collection" || (c.status as string) === "Under Investigation").length;
+    const closed = filteredCases.filter((c) => (c.status as string) === "Case Closed" || (c.status as string) === "Closed" || (c.status as string).toLowerCase().includes("closed") || (c.status as string).toLowerCase().includes("compounded")).length;
+    const backlog = filteredCases.filter((c) => c.durationDays > 20 && (c.status as string) !== "Case Closed").length;
     const total = filteredCases.length;
     const completionRate = total > 0 ? Math.round((closed / total) * 100) : 100;
     

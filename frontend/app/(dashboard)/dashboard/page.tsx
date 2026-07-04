@@ -103,7 +103,7 @@ export default function DashboardPage() {
   // 2. Aggregate KPI Metrics
   const metrics = React.useMemo(() => {
     const total = filteredFIRs.length;
-    const active = filteredFIRs.filter((f) => f.status === "Under Investigation" || f.status === "Awaiting Trial").length;
+    const active = filteredFIRs.filter((f) => (f.status as string) !== "Closed" && (f.status as string) !== "Case Closed" && !(f.status as string).toLowerCase().includes("closed") && !(f.status as string).toLowerCase().includes("compounded")).length;
     const closed = filteredFIRs.filter((f) => f.status === "Closed").length;
     const pending = filteredFIRs.filter((f) => f.status === "Under Investigation").length;
     const chargeSheets = filteredFIRs.filter((f) => f.status === "Charge Sheet Filed").length;
