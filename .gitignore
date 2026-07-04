@@ -118,3 +118,5 @@ Desktop.ini
 .agents/
 .gemini/
 .claude/
+
+tsconfig.tsbuildinfo
