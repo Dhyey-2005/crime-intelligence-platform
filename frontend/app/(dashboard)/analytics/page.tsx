@@ -445,7 +445,10 @@ export default function AnalyticsPage() {
       counts[c.category] = (counts[c.category] || 0) + 1;
     });
 
-    const data = Object.entries(counts).map(([name, value]) => ({ name, value }));
+    const data = Object.entries(counts)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
 
     return {
       backgroundColor: "transparent",
@@ -460,18 +463,27 @@ export default function AnalyticsPage() {
         extraCssText: "backdrop-filter: blur(12px); border-radius: 10px; box-shadow: 0 20px 30px -10px rgba(0, 0, 0, 0.7);",
       },
       legend: {
-        orient: "horizontal",
-        bottom: 0,
-        textStyle: { color: tokens.colors.text.secondary, fontSize: 10, fontWeight: 500 },
+        type: "scroll",
+        orient: "vertical",
+        right: "2%",
+        top: "6%",
+        bottom: "6%",
+        width: "48%",
+        textStyle: { color: tokens.colors.text.secondary, fontSize: 11, fontWeight: 500 },
         itemWidth: 10,
         itemHeight: 10,
-        itemGap: 16,
+        itemGap: 12,
+        formatter: (name: string) => {
+          const item = data.find((d) => d.name === name);
+          const val = item ? item.value : 0;
+          return `${name} (${val})`;
+        },
       },
       series: [
         {
           type: "pie",
-          radius: ["46%", "72%"],
-          center: ["50%", "44%"],
+          radius: ["55%", "80%"],
+          center: ["25%", "50%"],
           itemStyle: {
             borderRadius: 6,
             borderColor: "#0f172a",
@@ -485,6 +497,11 @@ export default function AnalyticsPage() {
             "#ec4899",
             "#f59e0b",
             "#10b981",
+            "#6366f1",
+            "#14b8a6",
+            "#f43f5e",
+            "#84cc16",
+            "#64748b",
           ],
           label: { show: false },
         },
@@ -527,7 +544,7 @@ export default function AnalyticsPage() {
       grid: { left: "3%", right: "4%", bottom: "15%", top: "8%", containLabel: true },
       xAxis: {
         type: "category",
-        data: dbCategories.map((c) => c.split(" ")[0]),
+        data: dbCategories.map((c) => (c.length > 14 ? c.slice(0, 14) + "…" : c)),
         axisLine: { lineStyle: { color: tokens.colors.border.default } },
         axisLabel: { color: tokens.colors.text.secondary, fontSize: 8 },
       },
@@ -554,15 +571,17 @@ export default function AnalyticsPage() {
 
     filteredCases.forEach((c) => {
       // Victims
-      if (c.victimAge < 18) ageBrackets["<18"].victim += 1;
-      else if (c.victimAge <= 35) ageBrackets["18-35"].victim += 1;
-      else if (c.victimAge <= 50) ageBrackets["36-50"].victim += 1;
+      const vAge = Number(c.victimAge) || 0;
+      if (vAge < 18) ageBrackets["<18"].victim += 1;
+      else if (vAge <= 35) ageBrackets["18-35"].victim += 1;
+      else if (vAge <= 50) ageBrackets["36-50"].victim += 1;
       else ageBrackets["50+"].victim += 1;
 
       // Accused
-      if (c.accusedAge < 18) ageBrackets["<18"].accused += 1;
-      else if (c.accusedAge <= 35) ageBrackets["18-35"].accused += 1;
-      else if (c.accusedAge <= 50) ageBrackets["36-50"].accused += 1;
+      const aAge = Number(c.accusedAge) || 0;
+      if (aAge < 18) ageBrackets["<18"].accused += 1;
+      else if (aAge <= 35) ageBrackets["18-35"].accused += 1;
+      else if (aAge <= 50) ageBrackets["36-50"].accused += 1;
       else ageBrackets["50+"].accused += 1;
     });
 
@@ -598,12 +617,109 @@ export default function AnalyticsPage() {
     };
   }, [filteredCases]);
 
+  // 4a. Investigations & Demographics dynamic aggregations from active live database
+  const investigationsData = React.useMemo(() => {
+    const statusCounts: Record<string, number> = {};
+    let arrestCount = 0;
+    let totalDuration = 0;
+
+    filteredCases.forEach((c) => {
+      const s = (c.status || "Unknown Status").toString();
+      statusCounts[s] = (statusCounts[s] || 0) + 1;
+      if (c.arrestCompleted) arrestCount += 1;
+      totalDuration += (c.durationDays || 0);
+    });
+
+    const total = filteredCases.length;
+    return {
+      statusList: Object.entries(statusCounts).sort((a, b) => b[1] - a[1]),
+      arrestPct: total > 0 ? Math.round((arrestCount / total) * 100) : 0,
+      avgDuration: total > 0 ? Math.round(totalDuration / total) : 0,
+    };
+  }, [filteredCases]);
+
+  const demographicsData = React.useMemo(() => {
+    const victimGenders: Record<string, number> = {};
+    const accusedGenders: Record<string, number> = {};
+    
+    filteredCases.forEach((c) => {
+      const vg = (c.victimGender || "Unknown").toString();
+      const ag = (c.accusedGender || "Unknown").toString();
+      victimGenders[vg] = (victimGenders[vg] || 0) + 1;
+      accusedGenders[ag] = (accusedGenders[ag] || 0) + 1;
+    });
+
+    return {
+      victimGenders: Object.entries(victimGenders).sort((a, b) => b[1] - a[1]),
+      accusedGenders: Object.entries(accusedGenders).sort((a, b) => b[1] - a[1]),
+    };
+  }, [filteredCases]);
+
+  // 4b. Operational Performance dynamic aggregations from active live database
+  const districtPerformanceData = React.useMemo(() => {
+    const distMap: Record<string, { total: number; active: number; pending: number; totalDuration: number; arrestCount: number }> = {};
+    filteredCases.forEach((c) => {
+      const d = c.district || "Unknown District";
+      if (!distMap[d]) {
+        distMap[d] = { total: 0, active: 0, pending: 0, totalDuration: 0, arrestCount: 0 };
+      }
+      distMap[d].total += 1;
+      const statusLower = (c.status || "").toString().toLowerCase();
+      const isClosed = statusLower.includes("closed") || statusLower.includes("compounded");
+      if (!isClosed) distMap[d].active += 1;
+      if (c.status === "Under Investigation" || statusLower.includes("investigation")) distMap[d].pending += 1;
+      distMap[d].totalDuration += (c.durationDays || 0);
+      if (c.arrestCompleted) distMap[d].arrestCount += 1;
+    });
+
+    return Object.entries(distMap)
+      .map(([district, stats]) => ({
+        district,
+        total: stats.total,
+        active: stats.active,
+        pending: stats.pending,
+        avgDuration: stats.total > 0 ? Math.round(stats.totalDuration / stats.total) : 0,
+        arrestPct: stats.total > 0 ? Math.round((stats.arrestCount / stats.total) * 100) : 100,
+      }))
+      .sort((a, b) => b.total - a.total);
+  }, [filteredCases]);
+
+  const officerWorkloadData = React.useMemo(() => {
+    const officerMap: Record<string, { total: number; active: number }> = {};
+    filteredCases.forEach((c) => {
+      const name = c.officerName || "Unassigned Officer";
+      if (!officerMap[name]) {
+        officerMap[name] = { total: 0, active: 0 };
+      }
+      officerMap[name].total += 1;
+      const statusLower = (c.status || "").toString().toLowerCase();
+      const isClosed = statusLower.includes("closed") || statusLower.includes("compounded");
+      if (!isClosed) officerMap[name].active += 1;
+    });
+
+    return Object.entries(officerMap)
+      .map(([name, stats]) => {
+        const loadPct = stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0;
+        return {
+          name,
+          total: stats.total,
+          active: stats.active,
+          loadPct,
+        };
+      })
+      .sort((a, b) => b.active - a.active);
+  }, [filteredCases]);
+
   // 5. Drill-Down Panel states (using modal Drawer)
   const [drillDownData, setDrillDownData] = React.useState<{ title: string; cases: AnalyticsCase[] } | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = React.useState(false);
+  const [drillSearch, setDrillSearch] = React.useState("");
+  const [drillLimit, setDrillLimit] = React.useState(30);
 
   const openDrillDown = (title: string, casesList: AnalyticsCase[]) => {
     setDrillDownData({ title, cases: casesList });
+    setDrillSearch("");
+    setDrillLimit(30);
     setIsDrawerOpen(true);
   };
 
@@ -633,21 +749,14 @@ export default function AnalyticsPage() {
   const explorerCases = React.useMemo(() => {
     let result = filteredCases.filter((c) => {
       if (!searchQuery) return true;
-      const query = searchQuery.toLowerCase();
-      return (
-        c.firNumber.toLowerCase().includes(query) ||
-        c.district.toLowerCase().includes(query) ||
-        c.policeStation.toLowerCase().includes(query) ||
-        c.category.toLowerCase().includes(query) ||
-        c.subcategory.toLowerCase().includes(query) ||
-        c.officerName.toLowerCase().includes(query)
-      );
+      const query = searchQuery.toLowerCase().trim();
+      return (c.firNumber || "").toString().toLowerCase().includes(query);
     });
 
     // Sorting
     result.sort((a, b) => {
-      const aVal = a[sortField];
-      const bVal = b[sortField];
+      const aVal = a[sortField] ?? "";
+      const bVal = b[sortField] ?? "";
 
       if (typeof aVal === "string" && typeof bVal === "string") {
         return sortDirection === "asc"
@@ -663,13 +772,14 @@ export default function AnalyticsPage() {
     return result;
   }, [filteredCases, searchQuery, sortField, sortDirection]);
 
-  // Paginated List
-  const paginatedCases = React.useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return explorerCases.slice(startIndex, startIndex + itemsPerPage);
-  }, [explorerCases, currentPage]);
-
   const totalPages = Math.max(Math.ceil(explorerCases.length / itemsPerPage), 1);
+
+  // Paginated List with out-of-bounds protection
+  const paginatedCases = React.useMemo(() => {
+    const validPage = Math.min(currentPage, totalPages);
+    const startIndex = (validPage - 1) * itemsPerPage;
+    return explorerCases.slice(startIndex, startIndex + itemsPerPage);
+  }, [explorerCases, currentPage, totalPages]);
 
   const handleSort = (field: keyof AnalyticsCase) => {
     if (sortField === field) {
@@ -680,11 +790,146 @@ export default function AnalyticsPage() {
     }
   };
 
-  // Export mock files alerts
+  // Real export functionality for active filtered Data Explorer subset
   const triggerExport = (format: "PDF" | "Excel" | "CSV") => {
-    toast.success(`Intelligence dossier generated in ${format} format successfully!`, {
-      description: `Downloaded file: KA_Crime_Report_${new Date().toISOString().split("T")[0]}.${format.toLowerCase()}`,
-    });
+    if (explorerCases.length === 0) {
+      toast.error("No matching records available to export!");
+      return;
+    }
+
+    const dateStr = new Date().toISOString().split("T")[0];
+
+    if (format === "CSV") {
+      const headers = ["FIR Number", "Date", "District", "Police Station", "Category", "Subcategory", "Status", "Severity", "Risk Level", "Officer", "Duration (Days)"];
+      const rows = explorerCases.map((c) => [
+        `"${(c.firNumber || "").toString().replace(/"/g, '""')}"`,
+        `"${(c.date || "").toString().replace(/"/g, '""')}"`,
+        `"${(c.district || "").toString().replace(/"/g, '""')}"`,
+        `"${(c.policeStation || "").toString().replace(/"/g, '""')}"`,
+        `"${(c.category || "").toString().replace(/"/g, '""')}"`,
+        `"${(c.subcategory || "").toString().replace(/"/g, '""')}"`,
+        `"${(c.status || "").toString().replace(/"/g, '""')}"`,
+        `"${(c.severity || "").toString().replace(/"/g, '""')}"`,
+        `"${(c.riskLevel || "").toString().replace(/"/g, '""')}"`,
+        `"${(c.officerName || "").toString().replace(/"/g, '""')}"`,
+        c.durationDays || 0,
+      ]);
+      const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+      const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `KA_Crime_Report_${dateStr}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast.success("CSV Dossier downloaded successfully!", {
+        description: `Exported ${explorerCases.length} records to KA_Crime_Report_${dateStr}.csv`,
+      });
+    } else if (format === "Excel") {
+      let tableHtml = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"/><style>th { background: #1e293b; color: #ffffff; font-weight: bold; border: 1px solid #cbd5e1; padding: 8px; text-align: left; } td { border: 1px solid #cbd5e1; padding: 6px; }</style></head><body><table><thead><tr><th>FIR Number</th><th>Date</th><th>District</th><th>Police Station</th><th>Category</th><th>Subcategory</th><th>Status</th><th>Severity</th><th>Officer</th><th>Duration (Days)</th></tr></thead><tbody>`;
+      explorerCases.forEach((c) => {
+        tableHtml += `<tr><td style="mso-number-format:'\@'">${c.firNumber || ""}</td><td>${c.date || ""}</td><td>${c.district || ""}</td><td>${c.policeStation || ""}</td><td>${c.category || ""}</td><td>${c.subcategory || ""}</td><td>${c.status || ""}</td><td>${c.severity || ""}</td><td>${c.officerName || ""}</td><td>${c.durationDays || 0}</td></tr>`;
+      });
+      tableHtml += `</tbody></table></body></html>`;
+      const blob = new Blob([tableHtml], { type: "application/vnd.ms-excel" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `KA_Crime_Report_${dateStr}.xls`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast.success("Excel Spreadsheet downloaded successfully!", {
+        description: `Exported ${explorerCases.length} records to KA_Crime_Report_${dateStr}.xls`,
+      });
+    } else if (format === "PDF") {
+      const printWin = window.open("", "_blank");
+      if (!printWin) {
+        toast.error("Popup blocked! Please allow popups to download the PDF report.");
+        return;
+      }
+      let html = `<!DOCTYPE html><html><head><title>Karnataka State Police - Intelligence Dossier</title><style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1e293b; margin: 30px; }
+        .header { border-bottom: 3px solid #1e40af; padding-bottom: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+        .title { font-size: 24px; font-weight: bold; color: #1e3a8a; }
+        .subtitle { font-size: 14px; color: #64748b; margin-top: 4px; }
+        .meta { font-size: 12px; color: #475569; text-align: right; }
+        .summary-box { background: #f1f5f9; padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; font-size: 13px; border-left: 4px solid #3b82f6; }
+        table { border-collapse: collapse; width: 100%; font-size: 11px; margin-top: 10px; }
+        th { background: #1e3a8a; color: #ffffff; text-align: left; padding: 8px; border: 1px solid #cbd5e1; font-weight: 600; }
+        td { padding: 8px; border: 1px solid #cbd5e1; color: #334155; }
+        tr:nth-child(even) { background: #f8fafc; }
+        .footer { margin-top: 30px; font-size: 10px; color: #94a3b8; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 15px; }
+        @media print { body { margin: 0; } .no-print { display: none; } }
+      </style></head><body>
+      <div class="header">
+        <div>
+          <div class="title">KARNATAKA STATE POLICE</div>
+          <div class="subtitle">CrimeShield Intelligence & Strategic Telemetry Dossier</div>
+        </div>
+        <div class="meta">
+          <div><strong>Generated Date:</strong> ${new Date().toLocaleString()}</div>
+          <div><strong>Total Records:</strong> ${explorerCases.length} Cases</div>
+        </div>
+      </div>
+      <div class="summary-box">
+        <strong>Filter Summary:</strong> Exporting current Data Explorer active intelligence subset. 
+        Includes data filtered by active search parameters and regional selections.
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>FIR Number</th>
+            <th>Date</th>
+            <th>District</th>
+            <th>Police Station</th>
+            <th>Category</th>
+            <th>Subcategory</th>
+            <th>Status</th>
+            <th>Severity</th>
+            <th>Officer</th>
+            <th>Duration</th>
+          </tr>
+        </thead>
+        <tbody>`;
+
+      explorerCases.forEach((c) => {
+        html += `<tr>
+          <td style="font-weight: bold;">${c.firNumber || "N/A"}</td>
+          <td>${c.date || "N/A"}</td>
+          <td>${c.district || "N/A"}</td>
+          <td>${c.policeStation || "N/A"}</td>
+          <td>${c.category || "N/A"}</td>
+          <td>${c.subcategory || "N/A"}</td>
+          <td>${c.status || "N/A"}</td>
+          <td>${c.severity || "N/A"}</td>
+          <td>${c.officerName || "N/A"}</td>
+          <td>${c.durationDays || 0} Days</td>
+        </tr>`;
+      });
+
+      html += `</tbody></table>
+      <div class="footer">
+        CONFIDENTIAL - LAW ENFORCEMENT INTELLIGENCE ONLY - GENERATED BY CRIMESHIELD PLATFORM
+      </div>
+      <script>
+        window.onload = () => { window.print(); };
+      </script>
+      </body></html>`;
+
+      printWin.document.open();
+      printWin.document.write(html);
+      printWin.document.close();
+
+      toast.success("PDF Dossier generated successfully!", {
+        description: "Print/Save as PDF window opened for active dataset.",
+      });
+    }
   };
 
   return (
@@ -971,7 +1216,7 @@ export default function AnalyticsPage() {
                         </Button>
                       </div>
                     </CardHeader>
-                    <CardContent className="h-80">
+                    <CardContent className="h-[380px]">
                       <Chart option={categoryOption} className="h-full" />
                     </CardContent>
                   </Card>
@@ -998,17 +1243,17 @@ export default function AnalyticsPage() {
                       </div>
                     </div>
 
-                    {/* Police Station Selector */}
+                    {/* Police Station Selector scoped to selected district */}
                     <div className="space-y-2 border-r border-border-subtle pr-4">
                       <span className="font-semibold text-text-primary text-[11px] block">Police Station Comparison</span>
                       <div className="grid grid-cols-2 gap-2">
                         <Select
-                          options={Object.values(dbPoliceStationsMap).flat().map((s) => ({ value: s, label: s }))}
+                          options={(dbPoliceStationsMap[compDistrict1] || Object.values(dbPoliceStationsMap).flat()).map((s) => ({ value: s, label: s }))}
                           value={compStation1}
                           onChange={(val) => setCompStation1(val)}
                         />
                         <Select
-                          options={Object.values(dbPoliceStationsMap).flat().map((s) => ({ value: s, label: s }))}
+                          options={(dbPoliceStationsMap[compDistrict2] || Object.values(dbPoliceStationsMap).flat()).map((s) => ({ value: s, label: s }))}
                           value={compStation2}
                           onChange={(val) => setCompStation2(val)}
                         />
@@ -1026,8 +1271,9 @@ export default function AnalyticsPage() {
                   </CardContent>
                 </Card>
 
-                {/* Comparative Charts */}
+                {/* Comparative Charts & Telemetry */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* District vs District Chart */}
                   <Card>
                     <CardHeader>
                       <CardTitle>District vs District (Category Load)</CardTitle>
@@ -1048,15 +1294,21 @@ export default function AnalyticsPage() {
                         { name: compStation2, cases: filteredCases.filter((c) => c.policeStation === compStation2) },
                       ].map((station) => {
                         const total = station.cases.length;
-                        const active = station.cases.filter((c) => !(c.status as string).toLowerCase().includes("closed") && !(c.status as string).toLowerCase().includes("compounded") && (c.status as string) !== "Closed" && (c.status as string) !== "Case Closed").length;
-                        const pendingSearch = station.cases.filter((c) => (c.status as string) === "Under Investigation" || (c.status as string).toLowerCase().includes("investigation")).length;
+                        const active = station.cases.filter((c) => {
+                          const s = (c.status || "").toString().toLowerCase();
+                          return !s.includes("closed") && !s.includes("compounded");
+                        }).length;
+                        const pendingSearch = station.cases.filter((c) => {
+                          const s = (c.status || "").toString();
+                          return s === "Under Investigation" || s.toLowerCase().includes("investigation");
+                        }).length;
                         const severityHigh = station.cases.filter((c) => c.severity === "High").length;
                         const completion = total > 0 ? Math.round(((total - active) / total) * 100) : 100;
 
                         return (
-                          <div key={station.name} className="p-4 bg-background-secondary/20 border border-border-subtle rounded-md space-y-3">
+                          <div key={station.name || "station"} className="p-4 bg-background-secondary/20 border border-border-subtle rounded-md space-y-3">
                             <div className="flex justify-between items-center border-b border-border-subtle pb-1.5">
-                              <span className="font-semibold text-text-primary text-xs">{station.name}</span>
+                              <span className="font-semibold text-text-primary text-xs">{station.name || "Select Station"}</span>
                               <Badge variant="primary">{total} Total Cases</Badge>
                             </div>
                             <div className="grid grid-cols-4 gap-1.5 text-center text-[10px]">
@@ -1083,6 +1335,71 @@ export default function AnalyticsPage() {
                       })}
                     </CardContent>
                   </Card>
+
+                  {/* Comparative Categories Head-to-Head Card (Full Width 2 cols on lg) */}
+                  <Card className="lg:col-span-2">
+                    <CardHeader>
+                      <CardTitle>Crime Category Head-to-Head Telemetry Comparison</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {[
+                        { name: compCategory1, cases: filteredCases.filter((c) => c.category === compCategory1) },
+                        { name: compCategory2, cases: filteredCases.filter((c) => c.category === compCategory2) },
+                      ].map((catItem) => {
+                        const total = catItem.cases.length;
+                        const active = catItem.cases.filter((c) => {
+                          const s = (c.status || "").toString().toLowerCase();
+                          return !s.includes("closed") && !s.includes("compounded");
+                        }).length;
+                        const arrestCount = catItem.cases.filter((c) => c.arrestCompleted).length;
+                        const arrestRate = total > 0 ? Math.round((arrestCount / total) * 100) : 0;
+                        const avgDuration = total > 0 ? Math.round(catItem.cases.reduce((sum, c) => sum + (c.durationDays || 0), 0) / total) : 0;
+                        let topDistrict = "N/A";
+                        if (total > 0) {
+                          const distCounts: Record<string, number> = {};
+                          catItem.cases.forEach((c) => {
+                            const d = c.district || "Unknown";
+                            distCounts[d] = (distCounts[d] || 0) + 1;
+                          });
+                          topDistrict = Object.entries(distCounts).sort((a, b) => b[1] - a[1])[0][0];
+                        }
+
+                        return (
+                          <div key={catItem.name || "cat"} className="p-4 bg-background-secondary/20 border border-border-subtle rounded-md space-y-4">
+                            <div className="flex justify-between items-center border-b border-border-subtle pb-2">
+                              <span className="font-semibold text-text-primary text-sm">{catItem.name || "Select Category"}</span>
+                              <Badge variant="ai">{total} Total Cases</Badge>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                              <div className="p-2 bg-background-secondary/10 rounded">
+                                <span className="block text-[10px] text-text-secondary uppercase font-semibold">Active Load</span>
+                                <span className="text-sm font-bold text-warning mt-0.5 block">{active} Cases</span>
+                              </div>
+                              <div className="p-2 bg-background-secondary/10 rounded">
+                                <span className="block text-[10px] text-text-secondary uppercase font-semibold">Arrest Rate</span>
+                                <span className="text-sm font-bold text-success mt-0.5 block">{arrestRate}%</span>
+                              </div>
+                              <div className="p-2 bg-background-secondary/10 rounded">
+                                <span className="block text-[10px] text-text-secondary uppercase font-semibold">Avg Resolution</span>
+                                <span className="text-sm font-bold text-text-primary mt-0.5 block">{avgDuration} Days</span>
+                              </div>
+                              <div className="p-2 bg-background-secondary/10 rounded">
+                                <span className="block text-[10px] text-text-secondary uppercase font-semibold">Top Hotspot</span>
+                                <span className="text-sm font-bold text-cyan-400 mt-0.5 block truncate" title={topDistrict}>{topDistrict}</span>
+                              </div>
+                            </div>
+                            <div className="space-y-1">
+                              <div className="flex justify-between text-[10px] text-text-secondary">
+                                <span>Investigation Resolution Ratio</span>
+                                <span>{total > 0 ? Math.round(((total - active) / total) * 100) : 100}%</span>
+                              </div>
+                              <ProgressBar value={total > 0 ? Math.round(((total - active) / total) * 100) : 100} color="analytics" className="h-1.5" />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </CardContent>
+                  </Card>
                 </div>
               </div>
             ),
@@ -1094,34 +1411,53 @@ export default function AnalyticsPage() {
             icon: <Users className="h-4 w-4" />,
             content: (
               <div className="space-y-6 mt-4">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Demographics Age Chart */}
-                  <Card>
+                {/* Top Row: Investigation Status & Telemetry from Live Database */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Live Investigation Status Breakdown & Telemetry</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                      {investigationsData.statusList.map(([status, count]) => {
+                        return (
+                          <div key={status} className="p-3 bg-background-secondary/20 border border-border-subtle rounded-md space-y-1">
+                            <span className="text-[10px] font-semibold text-text-secondary block line-clamp-2" title={status}>{status}</span>
+                            <span className="text-lg font-bold text-text-primary block">{count} Cases</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Bottom Row: Demographics from Live Database */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                  {/* Demographics Age Chart (7 cols) */}
+                  <Card className="lg:col-span-7">
                     <CardHeader>
-                      <CardTitle>Demographic Age distribution (Accused vs Victim)</CardTitle>
+                      <CardTitle>Demographic Age Distribution (Accused vs Victim)</CardTitle>
                     </CardHeader>
                     <CardContent className="h-80">
                       <Chart option={demographicsAgeOption} className="h-full" />
                     </CardContent>
                   </Card>
 
-                  {/* Gender lists */}
-                  <Card>
+                  {/* Gender Demographics (5 cols) */}
+                  <Card className="lg:col-span-5">
                     <CardHeader>
                       <CardTitle>Dossier Gender Demographics Allocation</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-6">
+                    <CardContent className="space-y-6 max-h-[350px] overflow-y-auto pr-1">
                       {/* Victim Gender */}
                       <div className="space-y-3">
                         <span className="font-semibold text-text-primary text-[11px] block">Victim Gender Distribution</span>
-                        <div className="grid grid-cols-3 gap-3 text-center">
-                          {["Male", "Female", "Other"].map((gen) => {
-                            const count = filteredCases.filter((c) => c.victimGender === gen).length;
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-center">
+                          {demographicsData.victimGenders.map(([gen, count]) => {
                             const pct = metrics.total > 0 ? Math.round((count / metrics.total) * 100) : 0;
                             return (
-                              <div key={gen} className="p-3 bg-background-secondary/20 border border-border-subtle rounded">
+                              <div key={gen} className="p-2.5 bg-background-secondary/20 border border-border-subtle rounded">
                                 <span className="block text-text-secondary text-[10px] font-semibold">{gen}</span>
-                                <span className="text-lg font-bold text-text-primary mt-1 block">{count}</span>
+                                <span className="text-base font-bold text-text-primary mt-0.5 block">{count}</span>
                                 <Caption className="text-[9px] text-text-secondary mt-0.5 block">({pct}%)</Caption>
                               </div>
                             );
@@ -1132,14 +1468,13 @@ export default function AnalyticsPage() {
                       {/* Accused Gender */}
                       <div className="space-y-3 border-t border-border-subtle pt-4">
                         <span className="font-semibold text-text-primary text-[11px] block">Accused Gender Distribution</span>
-                        <div className="grid grid-cols-2 gap-3 text-center">
-                          {["Male", "Female"].map((gen) => {
-                            const count = filteredCases.filter((c) => c.accusedGender === gen).length;
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-center">
+                          {demographicsData.accusedGenders.map(([gen, count]) => {
                             const pct = metrics.total > 0 ? Math.round((count / metrics.total) * 100) : 0;
                             return (
-                              <div key={gen} className="p-3 bg-background-secondary/20 border border-border-subtle rounded">
+                              <div key={gen} className="p-2.5 bg-background-secondary/20 border border-border-subtle rounded">
                                 <span className="block text-text-secondary text-[10px] font-semibold">{gen}</span>
-                                <span className="text-lg font-bold text-text-primary mt-1 block">{count}</span>
+                                <span className="text-base font-bold text-text-primary mt-0.5 block">{count}</span>
                                 <Caption className="text-[9px] text-text-secondary mt-0.5 block">({pct}%)</Caption>
                               </div>
                             );
@@ -1166,44 +1501,36 @@ export default function AnalyticsPage() {
                       <CardTitle>District Performance Rankings</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="w-full overflow-x-auto rounded-md border border-border-subtle">
+                      <div className="w-full overflow-x-auto rounded-md border border-border-subtle max-h-[480px] overflow-y-auto">
                         <table className="w-full text-left border-collapse text-[11px]">
-                          <thead>
-                            <tr className="bg-background-secondary border-b border-border-subtle text-text-primary">
+                          <thead className="sticky top-0 bg-background-secondary z-10">
+                            <tr className="border-b border-border-subtle text-text-primary">
                               <th className="p-3 font-semibold text-left">District</th>
                               <th className="p-3 font-semibold text-center">Total FIRs</th>
                               <th className="p-3 font-semibold text-center">Active Caseload</th>
                               <th className="p-3 font-semibold text-center">Pending Search</th>
                               <th className="p-3 font-semibold text-center">Resolution Time</th>
-                              <th className="p-3 font-semibold text-center">Arrest Index</th>
+                              
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border-subtle">
-                            {dbDistricts.map((d) => {
-                              const cases = filteredCases.filter((c) => c.district === d);
-                              const total = cases.length;
-                              const active = cases.filter((c) => !(c.status as string).toLowerCase().includes("closed") && !(c.status as string).toLowerCase().includes("compounded") && (c.status as string) !== "Closed" && (c.status as string) !== "Case Closed").length;
-                              const pending = cases.filter((c) => (c.status as string) === "Under Investigation" || (c.status as string).toLowerCase().includes("investigation")).length;
-                              const avgDuration = total > 0 ? Math.round(cases.reduce((sum, c) => sum + c.durationDays, 0) / total) : 0;
-                              const arrestCount = cases.filter((c) => c.arrestCompleted).length;
-                              const arrestPct = total > 0 ? Math.round((arrestCount / total) * 100) : 100;
-
-                              return (
-                                <tr key={d} className="hover:bg-background-secondary/20 transition-colors">
-                                  <td className="p-3 font-semibold text-text-primary">{d}</td>
-                                  <td className="p-3 text-center text-text-secondary">{total}</td>
-                                  <td className="p-3 text-center font-bold text-text-primary">{active}</td>
-                                  <td className="p-3 text-center text-warning">{pending}</td>
-                                  <td className="p-3 text-center text-text-secondary">{avgDuration} Days</td>
-                                  <td className="p-3 text-center">
-                                    <div className="flex items-center justify-center space-x-1.5">
-                                      <ProgressBar value={arrestPct} color={arrestPct > 70 ? "success" : "warning"} className="w-12 h-1" />
-                                      <span className="text-[10px] font-semibold text-text-primary">{arrestPct}%</span>
-                                    </div>
-                                  </td>
+                            {districtPerformanceData.length > 0 ? (
+                              districtPerformanceData.map((item) => (
+                                <tr key={item.district} className="hover:bg-background-secondary/20 transition-colors">
+                                  <td className="p-3 font-semibold text-text-primary">{item.district}</td>
+                                  <td className="p-3 text-center text-text-secondary">{item.total}</td>
+                                  <td className="p-3 text-center font-bold text-text-primary">{item.active}</td>
+                                  <td className="p-3 text-center text-warning">{item.pending}</td>
+                                  <td className="p-3 text-center text-text-secondary">{item.avgDuration} Days</td>
                                 </tr>
-                              );
-                            })}
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan={5} className="p-6 text-center text-text-secondary">
+                                  No operational district data available for selected filter horizon.
+                                </td>
+                              </tr>
+                            )}
                           </tbody>
                         </table>
                       </div>
@@ -1216,32 +1543,30 @@ export default function AnalyticsPage() {
                       <CardTitle>Officer Caseload Monitor</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
-                        {dbOfficers.map((name) => {
-                          const cases = filteredCases.filter((c) => c.officerName === name);
-                          const total = cases.length;
-                          if (total === 0) return null;
-                          const active = cases.filter((c) => !(c.status as string).toLowerCase().includes("closed") && !(c.status as string).toLowerCase().includes("compounded") && (c.status as string) !== "Closed" && (c.status as string) !== "Case Closed").length;
-                          const loadPct = Math.min(Math.round((active / 10) * 100), 100);
-
-                          return (
-                            <div key={name} className="p-3 bg-background-secondary/20 border border-border-subtle rounded-md space-y-2">
+                      <div className="space-y-4 max-h-[480px] overflow-y-auto pr-1">
+                        {officerWorkloadData.length > 0 ? (
+                          officerWorkloadData.map((item) => (
+                            <div key={item.name} className="p-3 bg-background-secondary/20 border border-border-subtle rounded-md space-y-2">
                               <div className="flex justify-between items-center text-xs">
-                                <span className="font-semibold text-text-primary">{name}</span>
-                                <Badge variant={active > 5 ? "danger" : active > 3 ? "warning" : "success"}>
-                                  {active} Active / {total} Total
+                                <span className="font-semibold text-text-primary">{item.name}</span>
+                                <Badge variant={item.loadPct > 70 ? "danger" : item.loadPct > 40 ? "warning" : "success"}>
+                                  {item.active} Active / {item.total} Total
                                 </Badge>
                               </div>
                               <div className="space-y-1">
                                 <div className="flex justify-between text-[9px] text-text-secondary">
-                                  <span>Load Capacity</span>
-                                  <span>{loadPct}%</span>
+                                  <span>Active Caseload Ratio</span>
+                                  <span>{item.loadPct}%</span>
                                 </div>
-                                <ProgressBar value={loadPct} color={active > 5 ? "danger" : active > 3 ? "warning" : "success"} className="h-1.5" />
+                                <ProgressBar value={item.loadPct} color={item.loadPct > 70 ? "danger" : item.loadPct > 40 ? "warning" : "success"} className="h-1.5" />
                               </div>
                             </div>
-                          );
-                        })}
+                          ))
+                        ) : (
+                          <div className="p-6 text-center text-text-secondary text-xs">
+                            No officer caseload data found for active filter criteria.
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -1268,13 +1593,13 @@ export default function AnalyticsPage() {
                           </span>
                           <Input
                             type="search"
-                            placeholder="Search records..."
+                            placeholder="Search by FIR Number..."
                             value={searchQuery}
                             onChange={(e) => {
                               setSearchQuery(e.target.value);
                               setCurrentPage(1);
                             }}
-                            className="w-64 pl-9"
+                            className="w-80 sm:w-96 pl-9"
                           />
                         </div>
 
@@ -1324,8 +1649,8 @@ export default function AnalyticsPage() {
                         </thead>
                         <tbody className="divide-y divide-border-subtle text-text-secondary">
                           {paginatedCases.length > 0 ? (
-                            paginatedCases.map((c) => (
-                              <tr key={c.id} className="hover:bg-background-secondary/20 transition-colors">
+                            paginatedCases.map((c, index) => (
+                              <tr key={`${c.firNumber || c.id}-${index}-${JSON.stringify(visibleColumns)}`} className="hover:bg-background-secondary/20 transition-colors">
                                 {visibleColumns.firNumber && <td className="p-3 font-semibold text-text-primary">{c.firNumber}</td>}
                                 {visibleColumns.date && <td className="p-3">{c.date}</td>}
                                 {visibleColumns.district && (
@@ -1384,8 +1709,8 @@ export default function AnalyticsPage() {
                     {/* Pagination controls */}
                     <div className="flex items-center justify-between border-t border-border-subtle pt-3 text-[11px]">
                       <div className="text-text-secondary">
-                        Showing <span className="font-semibold text-text-primary">{Math.min(explorerCases.length, (currentPage - 1) * itemsPerPage + 1)}</span> to{" "}
-                        <span className="font-semibold text-text-primary">{Math.min(explorerCases.length, currentPage * itemsPerPage)}</span> of{" "}
+                        Showing <span className="font-semibold text-text-primary">{explorerCases.length > 0 ? (Math.min(currentPage, totalPages) - 1) * itemsPerPage + 1 : 0}</span> to{" "}
+                        <span className="font-semibold text-text-primary">{Math.min(explorerCases.length, Math.min(currentPage, totalPages) * itemsPerPage)}</span> of{" "}
                         <span className="font-semibold text-text-primary">{explorerCases.length}</span> records
                       </div>
                       <div className="flex space-x-1">
@@ -1406,87 +1731,187 @@ export default function AnalyticsPage() {
       />
 
       {/* 4. Drill-Down Panel (Dynamic Drawer) */}
-      <Drawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} title={drillDownData?.title || "Dossier Drill Down"}>
-        {drillDownData && (
-          <div className="space-y-6 text-xs text-text-secondary leading-normal select-none">
-            
-            {/* General Case metrics */}
-            <div className="p-4 bg-background-secondary/20 border border-border-subtle rounded-md space-y-3">
-              <span className="font-semibold text-text-primary text-xs block">Drill-Down Summary</span>
-              <div className="grid grid-cols-2 gap-3 text-center">
-                <div className="p-2 bg-background-card rounded">
-                  <span className="text-[10px] block">Cases Inspected</span>
-                  <span className="text-lg font-bold text-text-primary block mt-0.5">{drillDownData.cases.length}</span>
-                </div>
-                <div className="p-2 bg-background-card rounded">
-                  <span className="text-[10px] block">Avg Duration</span>
-                  <span className="text-lg font-bold text-text-primary block mt-0.5">
-                    {drillDownData.cases.length > 0
-                      ? Math.round(drillDownData.cases.reduce((s, c) => s + c.durationDays, 0) / drillDownData.cases.length)
-                      : 0}{" "}
-                    Days
+      <Drawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        title={drillDownData?.title || "Dossier Drill Down"}
+        className="!max-w-2xl sm:!max-w-3xl lg:!max-w-4xl"
+      >
+        {drillDownData && (() => {
+          const filteredDrillCases = drillDownData.cases.filter((c) => {
+            if (!drillSearch.trim()) return true;
+            const q = drillSearch.toLowerCase();
+            return (
+              (c.firNumber && c.firNumber.toLowerCase().includes(q)) ||
+              (c.policeStation && c.policeStation.toLowerCase().includes(q)) ||
+              (c.district && c.district.toLowerCase().includes(q)) ||
+              (c.officerName && c.officerName.toLowerCase().includes(q)) ||
+              (c.category && c.category.toLowerCase().includes(q)) ||
+              (c.status && c.status.toLowerCase().includes(q))
+            );
+          });
+          const totalDuration = drillDownData.cases.reduce((s, c) => s + (c.durationDays || 0), 0);
+          const avgDuration = drillDownData.cases.length > 0 ? Math.round(totalDuration / drillDownData.cases.length) : 0;
+          const arrestCount = drillDownData.cases.filter((c) => c.arrestCompleted).length;
+          const arrestRate = drillDownData.cases.length > 0 ? Math.round((arrestCount / drillDownData.cases.length) * 100) : 0;
+          const highSevCount = drillDownData.cases.filter((c) => c.severity === "High").length;
+
+          return (
+            <div className="space-y-6 text-xs text-text-secondary leading-relaxed">
+              {/* Telemetry Overview Banner */}
+              <div className="p-5 bg-background-secondary/30 border border-border-subtle rounded-xl space-y-4 shadow-inner">
+                <div className="flex items-center justify-between border-b border-border-subtle/60 pb-3">
+                  <span className="font-bold text-text-primary text-sm flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-cyan-400" />
+                    Drill-Down Intelligence Summary
                   </span>
+                  <Badge variant="ai" className="px-2.5 py-0.5 text-xs">{drillDownData.cases.length} Total Records</Badge>
+                </div>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-center">
+                  <div className="p-3 bg-background-card/90 border border-border-subtle/60 rounded-lg shadow-sm">
+                    <span className="text-[11px] text-text-secondary uppercase block font-semibold">Inspected Load</span>
+                    <span className="text-lg font-bold text-text-primary block mt-1">{drillDownData.cases.length} Dossiers</span>
+                  </div>
+                  <div className="p-3 bg-background-card/90 border border-border-subtle/60 rounded-lg shadow-sm">
+                    <span className="text-[11px] text-text-secondary uppercase block font-semibold">High Severity</span>
+                    <span className="text-lg font-bold text-danger block mt-1">{highSevCount} Cases</span>
+                  </div>
+                  <div className="p-3 bg-background-card/90 border border-border-subtle/60 rounded-lg shadow-sm">
+                    <span className="text-[11px] text-text-secondary uppercase block font-semibold">Arrest Index</span>
+                    <span className="text-lg font-bold text-success block mt-1">{arrestRate}% Completed</span>
+                  </div>
+                  <div className="p-3 bg-background-card/90 border border-border-subtle/60 rounded-lg shadow-sm">
+                    <span className="text-[11px] text-text-secondary uppercase block font-semibold">Avg Resolution</span>
+                    <span className="text-lg font-bold text-cyan-400 block mt-1">{avgDuration} Days</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Filter Search Bar inside Drawer */}
+              <div className="relative">
+                <Search className="absolute left-3.5 top-3 h-4 w-4 text-text-secondary" />
+                <input
+                  type="text"
+                  placeholder="Filter drill-down records by FIR, station, officer, or status..."
+                  value={drillSearch}
+                  onChange={(e) => {
+                    setDrillSearch(e.target.value);
+                    setDrillLimit(30);
+                  }}
+                  className="w-full pl-10 pr-4 py-2.5 bg-background-secondary/30 border border-border-subtle rounded-lg text-text-primary placeholder:text-text-secondary/70 text-xs focus:outline-none focus:border-accent font-mono shadow-sm transition-colors"
+                />
+              </div>
+
+              {/* List of cases in drilldown */}
+              <div className="space-y-4">
+                <div className="flex justify-between items-center px-1">
+                  <span className="font-semibold text-text-primary text-xs">
+                    Showing {Math.min(filteredDrillCases.length, drillLimit)} of {filteredDrillCases.length} Dossier Entries
+                    {filteredDrillCases.length !== drillDownData.cases.length && ` (Filtered from ${drillDownData.cases.length} Total)`}
+                  </span>
+                  {drillSearch && (
+                    <button
+                      onClick={() => {
+                        setDrillSearch("");
+                        setDrillLimit(30);
+                      }}
+                      className="text-xs text-cyan-400 hover:underline font-medium"
+                    >
+                      Clear Filter
+                    </button>
+                  )}
+                </div>
+                
+                <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+                  {filteredDrillCases.slice(0, drillLimit).length > 0 ? (
+                    filteredDrillCases.slice(0, drillLimit).map((c) => {
+                      const isHigh = c.severity === "High";
+                      return (
+                        <div
+                          key={c.id || c.firNumber}
+                          className={`p-4 bg-background-card/95 border border-border-subtle rounded-xl shadow-md hover:border-border-strong transition-all space-y-4 ${
+                            isHigh ? "border-l-4 border-l-red-500" : "border-l-4 border-l-amber-500"
+                          }`}
+                        >
+                          {/* Dossier Header */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border-subtle/60 pb-3">
+                            <div className="flex items-center gap-3 flex-wrap">
+                              <span className="font-mono font-bold text-base text-cyan-400 tracking-tight">{c.firNumber}</span>
+                              <Badge variant={isHigh ? "danger" : "warning"} className="px-2 py-0.5 text-[11px]">
+                                {c.severity} Severity
+                              </Badge>
+                            </div>
+                            <span className="text-xs text-text-secondary font-mono">Filed: {c.date || "N/A"}</span>
+                          </div>
+
+                          {/* Metadata Grid */}
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                            <div className="bg-background-secondary/25 p-3 rounded-lg border border-border-subtle/40">
+                              <span className="text-text-secondary text-[10px] uppercase block font-semibold mb-1">Jurisdiction</span>
+                              <span className="text-text-primary font-semibold block truncate" title={`${c.district} - ${c.policeStation}`}>
+                                {c.district} ({c.policeStation})
+                              </span>
+                            </div>
+                            <div className="bg-background-secondary/25 p-3 rounded-lg border border-border-subtle/40">
+                              <span className="text-text-secondary text-[10px] uppercase block font-semibold mb-1">Classification</span>
+                              <span className="text-text-primary font-semibold block truncate" title={`${c.category} - ${c.subcategory}`}>
+                                {c.category} ({c.subcategory})
+                              </span>
+                            </div>
+                            <div className="bg-background-secondary/25 p-3 rounded-lg border border-border-subtle/40">
+                              <span className="text-text-secondary text-[10px] uppercase block font-semibold mb-1">Investigator & Status</span>
+                              <div className="flex items-center justify-between mt-0.5 gap-2">
+                                <span className="text-text-primary font-semibold truncate" title={c.officerName}>{c.officerName}</span>
+                                <Badge variant={c.arrestCompleted ? "success" : "warning"} className="text-[9px] px-2 py-0.5 shrink-0">
+                                  {c.status}
+                                </Badge>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Victim vs Accused Profiles */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-border-subtle/50 text-xs">
+                            <div className="p-3 bg-background-secondary/15 rounded-lg border border-border-subtle/40 flex items-center justify-between">
+                              <span className="font-semibold text-text-secondary uppercase text-[10px] tracking-wider">Victim Profile:</span>
+                              <span className="font-semibold text-text-primary">
+                                {c.victimGender || "Unknown"}, {c.victimAge || 0} Yrs Old
+                              </span>
+                            </div>
+                            <div className="p-3 bg-background-secondary/15 rounded-lg border border-border-subtle/40 flex items-center justify-between">
+                              <span className="font-semibold text-text-secondary uppercase text-[10px] tracking-wider">Accused Profile:</span>
+                              <span className="font-semibold text-text-primary">
+                                {c.accusedGender || "Unknown"}, {c.accusedAge || 0} Yrs Old
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="p-10 text-center text-text-secondary bg-background-card/50 border border-border-subtle rounded-xl">
+                      No dossier records matching your search filter &quot;{drillSearch}&quot;.
+                    </div>
+                  )}
+                  {filteredDrillCases.length > drillLimit && (
+                    <div className="pt-4 pb-6 text-center">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => setDrillLimit((prev) => prev + 30)}
+                        className="px-6 py-2.5 shadow-md flex items-center gap-2 mx-auto text-xs font-semibold"
+                      >
+                        <span>Load Next 30 Dossiers</span>
+                        <Badge variant="secondary" className="text-[10px] bg-black/30 text-white">
+                          {filteredDrillCases.length - drillLimit} Remaining
+                        </Badge>
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
-
-            {/* List of cases in drilldown */}
-            <div className="space-y-4">
-              <span className="font-semibold text-text-primary text-[11px] block">Individual Dossier Entries</span>
-              <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
-                {drillDownData.cases.map((c) => (
-                  <div key={c.id} className="p-3 bg-background-card border border-border-subtle rounded space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="font-bold text-text-primary">{c.firNumber}</span>
-                      <Badge variant={c.severity === "High" ? "danger" : "warning"}>{c.severity} Severity</Badge>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-2 text-[10px]">
-                      <div>
-                        <span className="text-text-secondary block">Date Filed:</span>
-                        <span className="text-text-primary font-medium">{c.date}</span>
-                      </div>
-                      <div>
-                        <span className="text-text-secondary block">District / Station:</span>
-                        <span className="text-text-primary font-medium">{c.district} ({c.policeStation})</span>
-                      </div>
-                      <div>
-                        <span className="text-text-secondary block">Category / Subcat:</span>
-                        <span className="text-text-primary font-medium">{c.category} ({c.subcategory})</span>
-                      </div>
-                      <div>
-                        <span className="text-text-secondary block">Investigation Officer:</span>
-                        <span className="text-text-primary font-medium">{c.officerName}</span>
-                      </div>
-                      <div>
-                        <span className="text-text-secondary block">Status:</span>
-                        <span className="text-text-primary font-medium">{c.status}</span>
-                      </div>
-                      <div>
-                        <span className="text-text-secondary block">Arrest status:</span>
-                        <Badge variant={c.arrestCompleted ? "success" : "secondary"}>
-                          {c.arrestCompleted ? "Arrest Completed" : "Search Active"}
-                        </Badge>
-                      </div>
-                    </div>
-
-                    <div className="border-t border-border-subtle pt-2 text-[9px] space-y-1">
-                      <div>
-                        <span className="text-text-secondary">Victim details:</span>{" "}
-                        <span className="text-text-primary font-semibold">{c.victimGender}, {c.victimAge} Years</span>
-                      </div>
-                      <div>
-                        <span className="text-text-secondary">Accused details:</span>{" "}
-                        <span className="text-text-primary font-semibold">{c.accusedGender}, {c.accusedAge} Years</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            
-          </div>
-        )}
+          );
+        })()}
       </Drawer>
     </div>
   );

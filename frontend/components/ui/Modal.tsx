@@ -157,7 +157,7 @@ export const Drawer: React.FC<DrawerProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex bg-black/60 backdrop-blur-sm select-none">
+    <div className="fixed inset-0 z-50 flex bg-black/60 backdrop-blur-sm">
       {/* Backdrop click close */}
       <div className="fixed inset-0" onClick={onClose} aria-hidden="true" />
 
